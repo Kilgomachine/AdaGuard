@@ -360,6 +360,11 @@ class FederatedSimulator:
         """
         import torch.optim as optim
 
+        epochs = self.config['pretrain_epochs']
+        if epochs <= 0:
+            print("Pre-training skipped (pretrain_epochs=0).")
+            return []
+
         self.global_model.train()
         loader = DataLoader(
             self.train_dataset,

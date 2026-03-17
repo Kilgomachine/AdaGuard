@@ -40,7 +40,8 @@ def make_serializable(obj):
     return obj
 
 
-def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_path):
+def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_path,
+                      pretrain_override=None):
     """Run FL rounds and save results."""
     from adaguard.config import load_config, set_seed, get_device
     from adaguard.models import create_model
@@ -48,6 +49,8 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     from adaguard.federation.simulator import FederatedSimulator
 
     config = load_config(config_path)
+    if pretrain_override is not None:
+        config['pretrain_epochs'] = pretrain_override
     set_seed(config['seed'])
     device = get_device()
 
@@ -59,6 +62,7 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     print(f"\nConfig: {config_path}")
     print(f"Clients: {config['num_clients']}, per round: {config['clients_per_round']}")
     print(f"Rounds: {config['num_rounds']}, Strategy: {strategy}")
+    print(f"Pretrain epochs: {config['pretrain_epochs']}")
     print(f"Skip GLMIP: {skip_glmip}, Skip Empirical: {skip_empirical}")
 
     # Load data
@@ -144,7 +148,8 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     return output
 
 
-def run_comparison(config_path, skip_glmip, skip_empirical, output_path):
+def run_comparison(config_path, skip_glmip, skip_empirical, output_path,
+                   pretrain_override=None):
     """Run all 4 strategies and save comparison results."""
     from adaguard.config import load_config, set_seed, get_device
     from adaguard.models import create_model
@@ -152,6 +157,8 @@ def run_comparison(config_path, skip_glmip, skip_empirical, output_path):
     from adaguard.federation.simulator import FederatedSimulator
 
     config = load_config(config_path)
+    if pretrain_override is not None:
+        config['pretrain_epochs'] = pretrain_override
     set_seed(config['seed'])
     device = get_device()
 
@@ -231,14 +238,21 @@ def main():
                         help='Skip GLMIP computation')
     parser.add_argument('--skip-empirical', action='store_true',
                         help='Skip empirical attack scoring')
+    parser.add_argument('--pretrain-epochs', type=int, default=None,
+                        help='Override pretrain epochs (0 to skip)')
 
     args = parser.parse_args()
 
+    # Allow CLI override of pretrain epochs
+    pretrain_override = args.pretrain_epochs
+
     if args.experiment == 'comparison':
-        run_comparison(args.config, args.skip_glmip, args.skip_empirical, args.output)
+        run_comparison(args.config, args.skip_glmip, args.skip_empirical,
+                       args.output, pretrain_override=pretrain_override)
     else:
         run_fl_experiment(args.config, args.strategy, args.skip_glmip,
-                          args.skip_empirical, args.output)
+                          args.skip_empirical, args.output,
+                          pretrain_override=pretrain_override)
 
 
 if __name__ == '__main__':
