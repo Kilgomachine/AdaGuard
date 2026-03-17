@@ -5,7 +5,7 @@
 model: resnet18
 num_classes: 10
 image_size: 32
-pretrain_epochs: 1  # 0 to skip, 1-2 for warm start, higher for full pretrain
+pretrain_epochs: 0  # 0 to skip, 1-2 for warm start, higher for full pretrain
 pretrain_lr: 0.01
 pretrain_batch_size: 256
 

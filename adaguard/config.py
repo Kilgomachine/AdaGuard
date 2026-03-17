@@ -13,7 +13,7 @@ DEFAULT_CONFIG = {
     'model': 'smallcnn',  # smallcnn, resnet18, resnet34, resnet50
     'num_classes': 10,
     'image_size': 32,
-    'pretrain_epochs': 1,  # 0 to skip pretrain entirely
+    'pretrain_epochs': 0,  # 0 to skip pretrain entirely
     'pretrain_lr': 0.01,
     'pretrain_batch_size': 64,
 
