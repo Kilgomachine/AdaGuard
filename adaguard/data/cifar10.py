@@ -29,8 +29,9 @@ def load_cifar10(data_root='./data'):
 def partition_data_non_iid(dataset, num_clients, num_classes=10):
     """Partition dataset into non-IID client shards (each client gets a subset of classes)."""
     label_indices = defaultdict(list)
-    for idx in range(len(dataset)):
-        _, label = dataset[idx]
+    # Use .targets directly (fast) instead of iterating dataset[idx] (slow)
+    targets = dataset.targets if hasattr(dataset, 'targets') else [dataset[i][1] for i in range(len(dataset))]
+    for idx, label in enumerate(targets):
         label_indices[label].append(idx)
 
     client_data = defaultdict(list)
