@@ -44,6 +44,8 @@ export PYTHONUNBUFFERED=1
 python -u run_headless.py \
     --config "$CONFIG" \
     --strategy "$STRATEGY" \
+    --skip-glmip \
+    --skip-empirical \
     --output "$OUTPUT"
 
 echo "Job completed at $(date)"
