@@ -1,0 +1,129 @@
+"""Label LeakScore: GLMIP, Confidence Gap, Cosine Similarity.
+
+Measures how much label information is encoded in gradients.
+"""
+
+import random
+from collections import defaultdict
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+
+class GLMIPMetric:
+    """Gradient-Label Mutual Information Proxy.
+
+    Computes between-class vs within-class gradient variance ratio
+    to estimate how distinguishable class labels are from gradients.
+    Score = S_B / (S_B + S_W), normalized to [0,1].
+    """
+
+    def compute(self, model, dataset, device, criterion,
+                num_classes=10, samples_per_class=20, focus_layers=None):
+        model.eval()
+        class_grads = defaultdict(list)
+        label_idx = defaultdict(list)
+
+        for i in range(len(dataset)):
+            _, l = dataset[i]
+            label_idx[int(l) if isinstance(l, torch.Tensor) else l].append(i)
+
+        for c in range(num_classes):
+            ids = label_idx.get(c, [])
+            if not ids:
+                continue
+            for idx in random.sample(ids, min(samples_per_class, len(ids))):
+                img, lbl = dataset[idx]
+                model.zero_grad()
+                out = model(img.unsqueeze(0).to(device))
+                criterion(
+                    out,
+                    torch.tensor([lbl], dtype=torch.long, device=device),
+                ).backward()
+
+                if focus_layers:
+                    parts = []
+                    for name, p in model.named_parameters():
+                        if p.grad is not None and name in focus_layers:
+                            parts.append(p.grad.clone().detach().flatten())
+                    flat = torch.cat(parts) if parts else torch.tensor([])
+                else:
+                    flat = torch.cat([
+                        p.grad.clone().detach().flatten()
+                        for p in model.parameters() if p.grad is not None
+                    ])
+
+                if flat.numel() > 0:
+                    class_grads[c].append(flat)
+
+        class_means = {c: torch.stack(gs).mean(0) for c, gs in class_grads.items()}
+        all_g = [g for gs in class_grads.values() for g in gs]
+        if not all_g:
+            return {'glmip_score': 0.0, 'class_means': {}}
+
+        mu = torch.stack(all_g).mean(0)
+
+        S_B = sum(
+            len(class_grads[c]) * torch.dot(class_means[c] - mu, class_means[c] - mu).item()
+            for c in class_grads
+        )
+        S_W = sum(
+            torch.dot(g - class_means[c], g - class_means[c]).item()
+            for c in class_grads for g in class_grads[c]
+        )
+
+        score = S_B / (S_B + S_W) if (S_B + S_W) > 1e-12 else 0.0
+        return {
+            'glmip_score': max(0.0, min(1.0, score)),
+            'S_B': S_B,
+            'S_W': S_W,
+            'class_means': class_means,
+        }
+
+
+class ConfidenceGapMetric:
+    """Confidence Gap: max(p) - second_max(p).
+
+    High gap means model is confident → label is strongly encoded.
+    """
+
+    def compute(self, logits):
+        if isinstance(logits, torch.Tensor):
+            probs = F.softmax(logits, dim=-1).detach().cpu().numpy()
+        else:
+            probs = logits
+
+        if probs.ndim == 2:
+            gaps = [np.sort(p)[::-1][0] - np.sort(p)[::-1][1] for p in probs]
+            return {'confidence_gap': max(0.0, min(1.0, float(np.mean(gaps))))}
+
+        s = np.sort(probs)[::-1]
+        return {'confidence_gap': max(0.0, min(1.0, float(s[0] - s[1])))}
+
+
+class CosineSimilarityMetric:
+    """Gradient Cosine Similarity Across Classes.
+
+    Low inter-class cosine similarity → label strongly encoded → high leak risk.
+    Score = 1 - normalized_mean_cosine, in [0,1].
+    """
+
+    def compute(self, class_means):
+        if len(class_means) < 2:
+            return {'cosine_leak_score': 0.0, 'mean_cosine_similarity': 0.0}
+
+        classes = sorted(class_means.keys())
+        sims = [
+            F.cosine_similarity(
+                class_means[classes[i]].unsqueeze(0),
+                class_means[classes[j]].unsqueeze(0),
+            ).item()
+            for i in range(len(classes))
+            for j in range(i + 1, len(classes))
+        ]
+        m = float(np.mean(sims))
+        return {
+            'cosine_leak_score': max(0.0, min(1.0, 1.0 - (m + 1.0) / 2.0)),
+            'mean_cosine_similarity': m,
+        }

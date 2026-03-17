@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Data downloads (will be auto-downloaded on HPC)
+data/cifar-10-batches-py/
+data/cifar-10-python.tar.gz
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and outputs
+*.log
+results/
+outputs/
+checkpoints/
+
+# Slurm output files
+slurm-*.out
+
+# Secrets
+.env
