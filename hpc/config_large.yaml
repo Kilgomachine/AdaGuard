@@ -1,0 +1,55 @@
+# AdaGuard Large-Scale HPC Configuration
+# For Matilda cluster with GPU nodes
+
+# Model
+num_classes: 10
+image_size: 32
+pretrain_epochs: 20
+pretrain_lr: 0.01
+pretrain_batch_size: 128
+
+# Federated Learning — large scale
+num_clients: 100
+clients_per_round: 10
+num_rounds: 50
+client_batch_size: 32
+client_local_steps: 5
+fl_lr: 0.01
+
+# LeakScore weights
+alpha: 1.0
+beta: 1.0
+gamma: 1.0
+
+# Encryption thresholds
+T1: 0.3
+T2: 0.7
+
+# Entropy metric
+entropy_bins: 50
+
+# Empirical attack settings (full, no shortcuts)
+empirical_iterations: 300
+empirical_lr: 0.1
+
+# Full GI attack (validation)
+gi_iters: 1000
+gi_lr: 0.1
+
+# Label metric
+mi_samples_per_class: 50
+
+# Fisher / MaskCrypt
+fisher_topk: 50
+encryption_top_percent: 0.1
+
+# Focus layers
+focus_layers: ['fc2.weight', 'fc2.bias']
+
+# Experiment sweeps
+batch_sizes_experiment: [1, 4, 8, 16, 32, 64, 128]
+noise_levels: [0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
+client_counts_experiment: [1, 5, 10, 50, 100, 500, 1000]
+
+# Seed
+seed: 42

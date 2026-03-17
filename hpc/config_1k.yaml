@@ -1,0 +1,55 @@
+# AdaGuard 1000-Client Configuration
+# For multi-GPU / multi-node runs on Matilda
+
+# Model
+num_classes: 10
+image_size: 32
+pretrain_epochs: 30
+pretrain_lr: 0.01
+pretrain_batch_size: 256
+
+# Federated Learning — 1K clients
+num_clients: 1000
+clients_per_round: 50
+num_rounds: 100
+client_batch_size: 32
+client_local_steps: 5
+fl_lr: 0.005
+
+# LeakScore weights
+alpha: 1.0
+beta: 1.0
+gamma: 1.0
+
+# Encryption thresholds
+T1: 0.3
+T2: 0.7
+
+# Entropy metric
+entropy_bins: 100
+
+# Empirical attack settings (full inversion)
+empirical_iterations: 500
+empirical_lr: 0.1
+
+# Full GI attack
+gi_iters: 2000
+gi_lr: 0.05
+
+# Label metric
+mi_samples_per_class: 100
+
+# Fisher / MaskCrypt
+fisher_topk: 100
+encryption_top_percent: 0.1
+
+# Focus layers
+focus_layers: ['fc2.weight', 'fc2.bias']
+
+# Sweeps
+batch_sizes_experiment: [1, 4, 8, 16, 32, 64, 128, 256]
+noise_levels: [0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
+client_counts_experiment: [10, 50, 100, 500, 1000]
+
+# Seed
+seed: 42
