@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 
-from ..models.cnn import SmallCNN
+from ..models import create_model
 
 
 class FLClient:
@@ -35,7 +35,8 @@ class FLClient:
         bs = batch_size or self.config['client_batch_size']
 
         # Create local model copy
-        local_model = SmallCNN(
+        local_model = create_model(
+            self.config.get('model', 'smallcnn'),
             num_classes=self.config['num_classes'],
         ).to(self.device)
         local_model.load_state_dict(global_state_dict)

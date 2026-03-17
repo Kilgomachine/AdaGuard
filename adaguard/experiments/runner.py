@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from ..config import load_config, set_seed, get_device
-from ..models.cnn import SmallCNN
+from ..models import create_model
 from ..data.cifar10 import load_cifar10, partition_data_non_iid
 from ..federation.simulator import FederatedSimulator
 from ..logging_utils.logger import RoundLogger
@@ -39,7 +39,8 @@ class ExperimentRunner:
         )
 
         # Create model
-        self.model = SmallCNN(
+        self.model = create_model(
+            self.config.get('model', 'smallcnn'),
             num_classes=self.config['num_classes'],
         ).to(self.device)
 
@@ -111,7 +112,8 @@ class ExperimentRunner:
             print(f"{'#'*60}")
 
             # Fresh model for each strategy
-            model_copy = SmallCNN(
+            model_copy = create_model(
+                self.config.get('model', 'smallcnn'),
                 num_classes=self.config['num_classes'],
             ).to(self.device)
             model_copy.load_state_dict(self.model.state_dict())
@@ -159,7 +161,8 @@ class ExperimentRunner:
             config_copy['beta'] = beta
             config_copy['gamma'] = gamma
 
-            model_copy = SmallCNN(
+            model_copy = create_model(
+                self.config.get('model', 'smallcnn'),
                 num_classes=self.config['num_classes'],
             ).to(self.device)
             model_copy.load_state_dict(self.model.state_dict())

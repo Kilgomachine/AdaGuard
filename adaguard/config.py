@@ -10,6 +10,7 @@ from pathlib import Path
 
 DEFAULT_CONFIG = {
     # Model
+    'model': 'smallcnn',  # smallcnn, resnet18, resnet34, resnet50
     'num_classes': 10,
     'image_size': 32,
     'pretrain_epochs': 5,

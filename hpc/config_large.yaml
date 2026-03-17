@@ -2,6 +2,7 @@
 # For Matilda cluster with GPU nodes
 
 # Model
+model: resnet18
 num_classes: 10
 image_size: 32
 pretrain_epochs: 20
@@ -44,7 +45,7 @@ fisher_topk: 50
 encryption_top_percent: 0.1
 
 # Focus layers
-focus_layers: ['fc2.weight', 'fc2.bias']
+focus_layers: ['fc.weight', 'fc.bias']
 
 # Experiment sweeps
 batch_sizes_experiment: [1, 4, 8, 16, 32, 64, 128]

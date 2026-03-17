@@ -11,7 +11,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from ..models.cnn import SmallCNN
 from ..metrics import (
     EntropyLeakScoreMetric,
     GLMIPMetric, ConfidenceGapMetric, CosineSimilarityMetric,

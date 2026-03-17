@@ -43,7 +43,7 @@ def make_serializable(obj):
 def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_path):
     """Run FL rounds and save results."""
     from adaguard.config import load_config, set_seed, get_device
-    from adaguard.models.cnn import SmallCNN
+    from adaguard.models import create_model
     from adaguard.data.cifar10 import load_cifar10, partition_data_non_iid
     from adaguard.federation.simulator import FederatedSimulator
 
@@ -68,7 +68,7 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     client_data_map = partition_data_non_iid(train_ds, config['num_clients'])
 
     # Create model
-    model = SmallCNN(num_classes=config['num_classes']).to(device)
+    model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Model: {total_params:,} params")
 
@@ -147,7 +147,7 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
 def run_comparison(config_path, skip_glmip, skip_empirical, output_path):
     """Run all 4 strategies and save comparison results."""
     from adaguard.config import load_config, set_seed, get_device
-    from adaguard.models.cnn import SmallCNN
+    from adaguard.models import create_model
     from adaguard.data.cifar10 import load_cifar10, partition_data_non_iid
     from adaguard.federation.simulator import FederatedSimulator
 
@@ -158,7 +158,7 @@ def run_comparison(config_path, skip_glmip, skip_empirical, output_path):
     train_ds, test_ds = load_cifar10(data_root=os.environ.get('DATA_DIR', './data'))
     client_data_map = partition_data_non_iid(train_ds, config['num_clients'])
 
-    base_model = SmallCNN(num_classes=config['num_classes']).to(device)
+    base_model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
     base_state = base_model.state_dict()
 
     strategies = ['none', 'fisher', 'maskcrypt', 'full']
@@ -169,7 +169,7 @@ def run_comparison(config_path, skip_glmip, skip_empirical, output_path):
         print(f"  Strategy: {strategy.upper()}")
         print(f"{'#'*60}")
 
-        model = SmallCNN(num_classes=config['num_classes']).to(device)
+        model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
         model.load_state_dict(base_state)
 
         sim = FederatedSimulator(

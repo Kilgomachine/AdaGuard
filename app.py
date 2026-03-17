@@ -33,7 +33,7 @@ import copy
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from adaguard.config import DEFAULT_CONFIG, set_seed, get_device
-from adaguard.models.cnn import SmallCNN
+from adaguard.models import create_model
 from adaguard.data.cifar10 import load_cifar10, partition_data_non_iid
 from adaguard.metrics import (
     EntropyLeakScoreMetric, GLMIPMetric, ConfidenceGapMetric,
@@ -299,7 +299,7 @@ with tab_run:
             client_map = partition_data_non_iid(train_ds, config['num_clients'])
 
             st.write(f"🧠 Creating SmallCNN on **{device}**...")
-            model = SmallCNN(num_classes=config['num_classes']).to(device)
+            model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
 
             sim = FederatedSimulator(model, train_ds, test_ds, client_map, config, device)
 
@@ -622,13 +622,13 @@ with tab_compare:
         set_seed(config['seed'])
         train_ds, test_ds = load_data()
         client_map = partition_data_non_iid(train_ds, config['num_clients'])
-        base_model = SmallCNN(num_classes=config['num_classes']).to(device)
+        base_model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
         all_results = {}
 
         with st.status("Running comparison...") as status:
             for si, strat in enumerate(selected_strategies):
                 st.write(f"Strategy: **{strat}** ({si+1}/{len(selected_strategies)})")
-                mc = SmallCNN(num_classes=config['num_classes']).to(device)
+                mc = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
                 mc.load_state_dict(base_model.state_dict())
                 sim = FederatedSimulator(mc, train_ds, test_ds, client_map, config, device)
                 sim.pretrain()
@@ -794,13 +794,13 @@ with tab_weights:
         set_seed(config['seed'])
         train_ds, test_ds = load_data()
         client_map = partition_data_non_iid(train_ds, config['num_clients'])
-        base = SmallCNN(num_classes=config['num_classes']).to(device)
+        base = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
         all_r = {}
         with st.status("Running weight study...") as status:
             for a, b, g in wcs:
                 st.write(f"α={a}, β={b}, γ={g}")
                 cfg = copy.deepcopy(config); cfg['alpha'], cfg['beta'], cfg['gamma'] = a, b, g
-                mc = SmallCNN(num_classes=config['num_classes']).to(device)
+                mc = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
                 mc.load_state_dict(base.state_dict())
                 sim = FederatedSimulator(mc, train_ds, test_ds, client_map, cfg, device)
                 sim.pretrain()
@@ -842,7 +842,7 @@ with tab_ablation:
         batch_sizes = st.multiselect("Batch sizes", [1, 2, 4, 8, 16, 32, 64], default=[1, 4, 8, 16, 32], key="bs_sel")
         if st.button("📊 Run Batch Size Study", type="primary", key="run_bs"):
             set_seed(config['seed']); train_ds, _ = load_data()
-            model = SmallCNN(num_classes=config['num_classes']).to(device)
+            model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
             criterion = torch.nn.CrossEntropyLoss()
             e_m = EntropyLeakScoreMetric(num_bins=config['entropy_bins'])
             f_m = FisherInformationMetric(topk=config['fisher_topk'], enc_pct=config['encryption_top_percent'])
@@ -880,7 +880,7 @@ with tab_ablation:
                                        default=[0, 0.001, 0.01, 0.05, 0.1], key="nl_sel")
         if st.button("📊 Run Noise Study", type="primary", key="run_ns"):
             set_seed(config['seed']); train_ds, _ = load_data()
-            model = SmallCNN(num_classes=config['num_classes']).to(device)
+            model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
             criterion = torch.nn.CrossEntropyLoss()
             e_m = EntropyLeakScoreMetric(num_bins=config['entropy_bins'])
             f_m = FisherInformationMetric(topk=config['fisher_topk'], enc_pct=config['encryption_top_percent'])
