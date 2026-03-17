@@ -2,7 +2,7 @@
 #SBATCH --job-name=adaguard-fl
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/adaguard-%j.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/adaguard-%j.err
-#SBATCH --partition=gpu
+#SBATCH --partition=general-short
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G

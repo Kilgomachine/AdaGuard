@@ -2,7 +2,7 @@
 #SBATCH --job-name=adaguard-sweep
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/sweep-%A_%a.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/sweep-%A_%a.err
-#SBATCH --partition=gpu
+#SBATCH --partition=general-short
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
