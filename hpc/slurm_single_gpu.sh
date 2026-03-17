@@ -3,9 +3,9 @@
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/adaguard-%j.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/adaguard-%j.err
 #SBATCH --partition=general-short
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
 #SBATCH --time=04:00:00
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=maguir@oakland.edu

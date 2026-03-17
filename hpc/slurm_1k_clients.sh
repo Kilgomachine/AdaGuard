@@ -3,9 +3,9 @@
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/1k-%j.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/1k-%j.err
 #SBATCH --partition=general-long
-#SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=128G
 #SBATCH --time=24:00:00
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=maguir@oakland.edu
