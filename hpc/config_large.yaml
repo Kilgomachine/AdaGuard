@@ -14,8 +14,8 @@ num_clients: 100
 clients_per_round: 10
 num_rounds: 50
 client_batch_size: 32
-client_local_steps: 5
-fl_lr: 0.01
+client_local_steps: 20
+fl_lr: 0.1
 
 # LeakScore weights
 alpha: 1.0

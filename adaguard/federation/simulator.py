@@ -53,7 +53,8 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     if result is None:
         return None
 
-    gd = result['gradient_dict']
+    gd = result['gradient_dict']           # raw gradient for LeakScore
+    weight_delta = result.get('weight_delta', gd)  # weight delta for FedAvg
     flat = result['flat_gradient']
     outputs = result['outputs']
     local_weights = result.get('local_weights', {})
@@ -61,6 +62,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
     # Move tensors to assigned GPU
     gd = {k: v.to(gpu_device) for k, v in gd.items()}
+    weight_delta_cpu = {k: v.cpu() for k, v in weight_delta.items()}  # keep on CPU for aggregation
     flat = flat.to(gpu_device)
     outputs = outputs.to(gpu_device)
     local_weights = {k: v.to(gpu_device) for k, v in local_weights.items()}
@@ -217,10 +219,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
     metrics['loss'] = result['loss']
 
-    # Move gradients back to CPU for aggregation
-    gd_cpu = {k: v.cpu() for k, v in gd.items()}
-
-    return cid, metrics, gd_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights
+    return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights
 
 
 class FederatedSimulator:
