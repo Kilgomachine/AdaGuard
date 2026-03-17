@@ -39,7 +39,9 @@ echo "Strategy: $STRATEGY"
 echo "Config: $CONFIG"
 echo "Output: $OUTPUT"
 
-python run_headless.py \
+export PYTHONUNBUFFERED=1
+
+python -u run_headless.py \
     --config "$CONFIG" \
     --strategy "$STRATEGY" \
     --output "$OUTPUT"

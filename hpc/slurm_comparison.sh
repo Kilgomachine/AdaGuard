@@ -26,7 +26,9 @@ cd /projects/secure-distributed-ml/AdaGuard
 CONFIG="${CONFIG:-hpc/config_large.yaml}"
 OUTPUT="/scratch/projects/secure-distributed-ml/results/comparison_$(date +%Y%m%d_%H%M%S)_${SLURM_JOB_ID}.json"
 
-python run_headless.py \
+export PYTHONUNBUFFERED=1
+
+python -u run_headless.py \
     --config "$CONFIG" \
     --experiment comparison \
     --output "$OUTPUT"

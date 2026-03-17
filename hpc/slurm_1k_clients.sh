@@ -30,7 +30,9 @@ OUTPUT="/scratch/projects/secure-distributed-ml/results/1k_${STRATEGY}_$(date +%
 echo "1000-client run, strategy: $STRATEGY"
 echo "Output: $OUTPUT"
 
-python run_headless.py \
+export PYTHONUNBUFFERED=1
+
+python -u run_headless.py \
     --config hpc/config_1k.yaml \
     --strategy "$STRATEGY" \
     --output "$OUTPUT"

@@ -35,7 +35,9 @@ OUTPUT="/scratch/projects/secure-distributed-ml/results/sweep_${STRATEGY}_$(date
 echo "Strategy: $STRATEGY"
 echo "Output: $OUTPUT"
 
-python run_headless.py \
+export PYTHONUNBUFFERED=1
+
+python -u run_headless.py \
     --config "$CONFIG" \
     --strategy "$STRATEGY" \
     --output "$OUTPUT"
