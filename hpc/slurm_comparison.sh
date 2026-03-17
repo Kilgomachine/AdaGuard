@@ -16,8 +16,8 @@
 
 echo "Job $SLURM_JOB_ID started on $(hostname) at $(date)"
 
-module load python/3.11
-module load cuda/12.1
+module load Python/3.10.14
+module load CUDA/12.4
 source /projects/secure-distributed-ml/venv/bin/activate
 
 export DATA_DIR="/scratch/projects/secure-distributed-ml/data"

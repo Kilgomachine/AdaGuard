@@ -21,9 +21,8 @@ mkdir -p "$SCRATCH_DIR/data"
 mkdir -p "$SCRATCH_DIR/logs"
 
 echo "[1/4] Loading modules..."
-module load python/3.11
-module load cuda/12.1
-module load gcc
+module load Python/3.10.14
+module load CUDA/12.4
 
 echo "[2/4] Creating Python virtual environment..."
 if [ ! -d "$VENV_DIR" ]; then
@@ -37,7 +36,7 @@ source "$VENV_DIR/bin/activate"
 
 echo "[3/4] Installing dependencies..."
 pip install --upgrade pip
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 pip install numpy pandas matplotlib seaborn pyyaml streamlit plotly scipy
 
 echo "[4/4] Verifying installation..."
