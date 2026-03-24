@@ -24,14 +24,15 @@ def fedavg_aggregate(gradient_dicts):
 
 
 def apply_gradient_update(model, averaged_gradients, lr):
-    """Apply aggregated gradients to global model.
+    """Apply aggregated weight deltas to global model.
 
-    Args:
-        model: global model to update
-        averaged_gradients: averaged gradient dict
-        lr: learning rate
+    weight_delta = global_weights - local_weights (computed in client.py).
+    This IS the direction of change, so we subtract it directly:
+        new_global = global - avg(global - local) = avg(local)
+    The lr parameter is kept for API compatibility but set to 1.0 for
+    standard FedAvg (weight delta already encodes the full update).
     """
     with torch.no_grad():
         for name, p in model.named_parameters():
             if name in averaged_gradients:
-                p -= lr * averaged_gradients[name]
+                p -= averaged_gradients[name]
