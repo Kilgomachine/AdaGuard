@@ -105,17 +105,122 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         )
         rnd_time = time.time() - rnd_start
 
-        # Strip client_details to save space (has tensor refs)
+        # Strip client_details from saved JSON (has tensor refs, too large)
         summary_clean = {k: v for k, v in summary.items() if k != 'client_details'}
         summary_clean['round_time_s'] = rnd_time
+        # Save per-client leakscores as a compact list
+        clients = summary.get('client_details', [])
+        if clients:
+            summary_clean['per_client'] = [
+                {
+                    'id': cd.get('client_id'),
+                    'loss': cd.get('metrics', {}).get('loss', 0),
+                    'leakscore': cd.get('metrics', {}).get('combined_leakscore', 0),
+                    'encrypted_pct': cd.get('metrics', {}).get('actual_pct_encrypted', 0),
+                }
+                for cd in clients
+            ]
         round_results.append(summary_clean)
 
         acc = summary.get('accuracy', 0) * 100
         leak = summary.get('combined_leakscore', 0)
         enc = summary.get('actual_pct_encrypted', 0) * 100
-        print(f"  Round {rnd+1:3d}/{config['num_rounds']} — "
-              f"Acc: {acc:5.1f}%, LeakScore: {leak:.4f}, "
-              f"Encrypted: {enc:5.1f}%, Time: {rnd_time:.1f}s")
+
+        # ── Detailed round log ──
+        print(f"\n{'─'*70}")
+        print(f"  Round {rnd+1:3d}/{config['num_rounds']}  |  Time: {rnd_time:.1f}s")
+        print(f"{'─'*70}")
+
+        # Model performance
+        loss_val = summary.get('loss', 0)
+        print(f"  Model      │ Accuracy: {acc:5.1f}%  Loss: {loss_val:.4f}")
+
+        # LeakScore breakdown
+        ent = summary.get('entropy_avg', 0)
+        lab = summary.get('label_avg', 0)
+        emp = summary.get('empirical_avg', 0)
+        print(f"  LeakScore  │ Combined: {leak:.4f}  "
+              f"(Entropy: {ent:.3f}  Label: {lab:.3f}  Empirical: {emp:.3f})")
+
+        # Entropy sub-metrics
+        sh = summary.get('shannon_leak_score', 0)
+        re = summary.get('renyi_leak_score', 0)
+        me = summary.get('min_entropy_leak_score', 0)
+        print(f"    Entropy  │ Shannon: {sh:.3f}  Renyi: {re:.3f}  MinEnt: {me:.3f}")
+
+        # Label sub-metrics
+        gl = summary.get('glmip_score', 0)
+        cg = summary.get('confidence_gap', 0)
+        cs = summary.get('cosine_leak_score', 0)
+        print(f"    Label    │ GLMIP: {gl:.3f}  ConfGap: {cg:.3f}  Cosine: {cs:.3f}")
+
+        # Empirical sub-metrics
+        gi = summary.get('empirical_gradinversion', 0)
+        gn = summary.get('empirical_ginas', 0)
+        gc = summary.get('empirical_ggcdm', 0)
+        print(f"    Empirical│ GradInv: {gi:.3f}  GI-NAS: {gn:.3f}  GGCDM: {gc:.3f}")
+
+        # Encryption metrics
+        fc = summary.get('fisher_concentration', 0)
+        fn = summary.get('fisher_round_norm', 0)
+        mv = summary.get('maskcrypt_vulnerability', 0)
+        mg = summary.get('magnitude_score', 0)
+        print(f"  Fisher     │ Concentration: {fc:.4f}  Normalized: {fn:.4f}")
+        print(f"  MaskCrypt  │ Vulnerability: {mv:.4f}")
+        print(f"  Magnitude  │ Score: {mg:.4f}")
+
+        # Encryption decision
+        level = summary.get('encryption_level', 'N/A')
+        pct = summary.get('encryption_pct', 0)
+        k = summary.get('params_encrypted', 0)
+        print(f"  Encryption │ Level: {level}  Target: {pct*100:.1f}%  "
+              f"Actual: {enc:.1f}%  Params: {int(k):,}")
+
+        # Timing breakdown
+        t_ent = summary.get('entropy_compute_time', 0)
+        t_fish = summary.get('fisher_compute_time', 0)
+        t_mc = summary.get('maskcrypt_compute_time', 0)
+        t_gl = summary.get('glmip_compute_time', 0)
+        t_emp = summary.get('empirical_compute_time', 0)
+        print(f"  Timing     │ Entropy: {t_ent:.2f}s  Fisher: {t_fish:.2f}s  "
+              f"MaskCrypt: {t_mc:.2f}s  GLMIP: {t_gl:.2f}s  Empirical: {t_emp:.2f}s")
+
+        # Per-weight stats
+        fw_mean = summary.get('fisher_per_weight_mean', 0)
+        fw_p95 = summary.get('fisher_per_weight_p95', 0)
+        mw_mean = summary.get('maskcrypt_per_weight_mean', 0)
+        mw_p95 = summary.get('maskcrypt_per_weight_p95', 0)
+        if fw_mean > 0 or mw_mean > 0:
+            print(f"  Weights    │ Fisher mean: {fw_mean:.6f} p95: {fw_p95:.6f}  "
+                  f"MaskCrypt mean: {mw_mean:.6f} p95: {mw_p95:.6f}")
+
+        # Reconstruction quality (if empirical enabled)
+        r_mse = summary.get('recon_mse', 0)
+        r_psnr = summary.get('recon_psnr', 0)
+        r_ssim = summary.get('recon_ssim', 0)
+        if r_psnr > 0:
+            print(f"  Recon      │ MSE: {r_mse:.4f}  PSNR: {r_psnr:.2f}dB  SSIM: {r_ssim:.4f}")
+
+        # Per-client summary
+        clients = summary.get('client_details', [])
+        if clients:
+            print(f"  Clients    │ {len(clients)} processed")
+            for ci, cd in enumerate(clients[:3]):  # show first 3 clients
+                cm = cd.get('metrics', {})
+                print(f"    Client {cd.get('client_id', ci):3d} │ "
+                      f"Loss: {cm.get('loss', 0):.4f}  "
+                      f"LeakScore: {cm.get('combined_leakscore', 0):.4f}  "
+                      f"Encrypted: {cm.get('actual_pct_encrypted', 0)*100:.1f}%")
+            if len(clients) > 3:
+                print(f"    ... +{len(clients)-3} more clients")
+
+        # Running stats
+        elapsed = time.time() - total_start
+        avg_per_round = elapsed / (rnd + 1)
+        remaining = avg_per_round * (config['num_rounds'] - rnd - 1)
+        print(f"  Progress   │ Elapsed: {elapsed/60:.1f}min  "
+              f"Avg/round: {avg_per_round:.1f}s  "
+              f"ETA: {remaining/60:.1f}min")
 
     total_time = time.time() - total_start
 
