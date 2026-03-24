@@ -35,5 +35,8 @@ checkpoints/
 # Slurm output files
 slurm-*.out
 
+# Generated PDFs
+*.pdf
+
 # Secrets
 .env
