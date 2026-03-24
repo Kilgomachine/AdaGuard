@@ -299,7 +299,12 @@ class FederatedSimulator:
                            for i, cid in enumerate(selected)}
 
         # Process clients in parallel across GPUs
-        max_workers = min(self.num_gpus, len(selected))
+        # Allow multiple clients per GPU (ResNet-18 ~45MB, V100 has 16GB)
+        # 2-3 clients per GPU keeps memory safe while maximizing throughput
+        clients_per_gpu = min(3, max(1, len(selected) // self.num_gpus))
+        max_workers = min(len(selected), self.num_gpus * clients_per_gpu)
+        print(f"  [Parallel] {max_workers} workers across {self.num_gpus} GPUs "
+              f"({clients_per_gpu} clients/GPU)")
 
         if max_workers > 1:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:

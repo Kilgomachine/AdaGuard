@@ -22,18 +22,40 @@ class GLMIPMetric:
     def compute(self, model, dataset, device, criterion,
                 num_classes=10, samples_per_class=20, focus_layers=None):
         model.eval()
-        class_grads = defaultdict(list)
-        label_idx = defaultdict(list)
 
-        for i in range(len(dataset)):
-            _, l = dataset[i]
-            label_idx[int(l) if isinstance(l, torch.Tensor) else l].append(i)
+        # Fast label indexing — avoid iterating 50K dataset items
+        if hasattr(dataset, 'targets'):
+            targets = dataset.targets
+            if isinstance(targets, torch.Tensor):
+                targets = targets.tolist()
+            label_idx = defaultdict(list)
+            for i, l in enumerate(targets):
+                label_idx[int(l)].append(i)
+        elif hasattr(dataset, 'labels'):
+            targets = dataset.labels
+            if isinstance(targets, torch.Tensor):
+                targets = targets.tolist()
+            label_idx = defaultdict(list)
+            for i, l in enumerate(targets):
+                label_idx[int(l)].append(i)
+        else:
+            # Fallback: iterate dataset (slow)
+            label_idx = defaultdict(list)
+            for i in range(len(dataset)):
+                _, l = dataset[i]
+                label_idx[int(l) if isinstance(l, torch.Tensor) else l].append(i)
+
+        class_grads = defaultdict(list)
 
         for c in range(num_classes):
             ids = label_idx.get(c, [])
             if not ids:
                 continue
-            for idx in random.sample(ids, min(samples_per_class, len(ids))):
+
+            sampled = random.sample(ids, min(samples_per_class, len(ids)))
+
+            # Batch forward+backward for speed
+            for idx in sampled:
                 img, lbl = dataset[idx]
                 model.zero_grad()
                 out = model(img.unsqueeze(0).to(device))
@@ -85,7 +107,7 @@ class GLMIPMetric:
 class ConfidenceGapMetric:
     """Confidence Gap: max(p) - second_max(p).
 
-    High gap means model is confident → label is strongly encoded.
+    High gap means model is confident -> label is strongly encoded.
     """
 
     def compute(self, logits):
@@ -105,7 +127,7 @@ class ConfidenceGapMetric:
 class CosineSimilarityMetric:
     """Gradient Cosine Similarity Across Classes.
 
-    Low inter-class cosine similarity → label strongly encoded → high leak risk.
+    Low inter-class cosine similarity -> label strongly encoded -> high leak risk.
     Score = 1 - normalized_mean_cosine, in [0,1].
     """
 
