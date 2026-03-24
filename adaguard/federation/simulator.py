@@ -299,9 +299,11 @@ class FederatedSimulator:
                            for i, cid in enumerate(selected)}
 
         # Process clients in parallel across GPUs
-        # Allow multiple clients per GPU (ResNet-18 ~45MB, V100 has 16GB)
-        # 2-3 clients per GPU keeps memory safe while maximizing throughput
-        clients_per_gpu = min(3, max(1, len(selected) // self.num_gpus))
+        cpg = self.config.get('clients_per_gpu', 3)
+        if cpg <= 0:
+            # Auto: estimate from available GPU memory
+            cpg = max(1, len(selected) // self.num_gpus)
+        clients_per_gpu = cpg
         max_workers = min(len(selected), self.num_gpus * clients_per_gpu)
         print(f"  [Parallel] {max_workers} workers across {self.num_gpus} GPUs "
               f"({clients_per_gpu} clients/GPU)")

@@ -55,6 +55,9 @@ DEFAULT_CONFIG = {
     # Focus layers (where label info concentrates per iDLG theorem)
     'focus_layers': ['fc2.weight', 'fc2.bias'],
 
+    # Parallelism
+    'clients_per_gpu': 3,  # max concurrent clients per GPU (0 = auto)
+
     # Experiment sweeps
     'batch_sizes_experiment': [1, 4, 8, 16, 32, 64],
     'noise_levels': [0, 0.001, 0.01, 0.05, 0.1],
