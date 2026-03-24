@@ -2,11 +2,11 @@
 #SBATCH --job-name=adaguard-exp
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/exp-%A_%a.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/exp-%A_%a.err
-#SBATCH --partition=general-short
+#SBATCH --partition=general-long
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
-#SBATCH --time=04:00:00
+#SBATCH --time=24:00:00
 #SBATCH --array=0-11
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=maguir@oakland.edu
@@ -53,8 +53,6 @@ python -u run_headless.py \
     --config hpc/config_large.yaml \
     --strategy "$STRATEGY" \
     --seed "$SEED" \
-    --skip-empirical \
-    --skip-glmip \
     --output "$OUTPUT"
 
 echo "Task $SLURM_ARRAY_TASK_ID ($STRATEGY, seed=$SEED) completed at $(date)"
