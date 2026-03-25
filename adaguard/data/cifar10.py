@@ -63,6 +63,11 @@ def partition_data_non_iid(dataset, num_clients, num_classes=10):
 
     for cid in client_data:
         random.shuffle(client_data[cid])
-        print(f"  Client {cid}: {len(client_data[cid])} samples")
+
+    # Summary instead of per-client spam
+    sizes = [len(v) for v in client_data.values()]
+    print(f"  Partitioned into {num_clients} clients: "
+          f"{min(sizes)}-{max(sizes)} samples/client (mean {sum(sizes)/len(sizes):.0f}), "
+          f"{classes_per_client} classes/client")
 
     return dict(client_data)
