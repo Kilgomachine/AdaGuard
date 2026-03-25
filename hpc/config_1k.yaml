@@ -1,21 +1,28 @@
 # AdaGuard 1000-Client Configuration
 # For multi-GPU / multi-node runs on Matilda
+#
+# CIFAR-10 has 50K training images. With 1000 clients, each gets ~50 samples
+# (non-IID: 2 classes, ~25 samples/class). This is realistic for cross-device FL.
+#
+# Override at runtime: python run_headless.py --config hpc/config_1k.yaml \
+#     --num-clients 2000 --clients-per-round 100
 
 # Model
 model: resnet18
 num_classes: 10
 image_size: 32
-pretrain_epochs: 0  # 0 to skip, 1-2 for warm start, higher for full pretrain
+pretrain_epochs: 0
 pretrain_lr: 0.01
 pretrain_batch_size: 256
 
 # Federated Learning — 1K clients
 num_clients: 1000
-clients_per_round: 50
-num_rounds: 100
-client_batch_size: 32
-client_local_steps: 5
-fl_lr: 0.005
+clients_per_round: 50       # 5% participation rate (standard for cross-device FL)
+num_rounds: 50
+client_batch_size: 16       # smaller batch for ~50 samples/client
+client_local_steps: 10      # ~2 local epochs per round
+client_lr: 0.01             # local SGD learning rate
+fl_lr: 1.0                  # server-side lr (1.0 = standard FedAvg)
 
 # LeakScore weights
 alpha: 1.0
@@ -27,25 +34,28 @@ T1: 0.3
 T2: 0.7
 
 # Entropy metric
-entropy_bins: 100
+entropy_bins: 50
 
-# Empirical attack settings (full inversion)
-empirical_iterations: 500
+# Empirical attack settings
+empirical_iterations: 300
 empirical_lr: 0.1
 
 # Full GI attack
-gi_iters: 2000
-gi_lr: 0.05
+gi_iters: 1000
+gi_lr: 0.1
 
 # Label metric
-mi_samples_per_class: 100
+mi_samples_per_class: 50
 
 # Fisher / MaskCrypt
-fisher_topk: 100
+fisher_topk: 50
 encryption_top_percent: 0.1
 
 # Focus layers
 focus_layers: ['fc.weight', 'fc.bias']
+
+# Parallelism — 4 V100s, 2 clients/GPU to avoid OOM with 50 concurrent
+clients_per_gpu: 2
 
 # Sweeps
 batch_sizes_experiment: [1, 4, 8, 16, 32, 64, 128, 256]

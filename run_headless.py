@@ -46,7 +46,9 @@ def make_serializable(obj):
 
 
 def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_path,
-                      pretrain_override=None, seed_override=None):
+                      pretrain_override=None, seed_override=None,
+                      num_clients_override=None, clients_per_round_override=None,
+                      num_rounds_override=None, client_lr_override=None):
     """Run FL rounds and save results."""
     from adaguard.config import load_config, set_seed, get_device
     from adaguard.models import create_model
@@ -58,6 +60,14 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         config['pretrain_epochs'] = pretrain_override
     if seed_override is not None:
         config['seed'] = seed_override
+    if num_clients_override is not None:
+        config['num_clients'] = num_clients_override
+    if clients_per_round_override is not None:
+        config['clients_per_round'] = clients_per_round_override
+    if num_rounds_override is not None:
+        config['num_rounds'] = num_rounds_override
+    if client_lr_override is not None:
+        config['client_lr'] = client_lr_override
     set_seed(config['seed'])
     device = get_device()
 
@@ -357,6 +367,14 @@ def main():
                         help='Override pretrain epochs (0 to skip)')
     parser.add_argument('--seed', type=int, default=None,
                         help='Override random seed')
+    parser.add_argument('--num-clients', type=int, default=None,
+                        help='Override number of FL clients')
+    parser.add_argument('--clients-per-round', type=int, default=None,
+                        help='Override clients selected per round')
+    parser.add_argument('--num-rounds', type=int, default=None,
+                        help='Override number of FL rounds')
+    parser.add_argument('--client-lr', type=float, default=None,
+                        help='Override client local learning rate')
 
     args = parser.parse_args()
 
@@ -371,7 +389,11 @@ def main():
         run_fl_experiment(args.config, args.strategy, args.skip_glmip,
                           args.skip_empirical, args.output,
                           pretrain_override=pretrain_override,
-                          seed_override=args.seed)
+                          seed_override=args.seed,
+                          num_clients_override=args.num_clients,
+                          clients_per_round_override=args.clients_per_round,
+                          num_rounds_override=args.num_rounds,
+                          client_lr_override=args.client_lr)
 
 
 if __name__ == '__main__':

@@ -9,14 +9,14 @@ pretrain_epochs: 0  # 0 to skip, 1-2 for warm start, higher for full pretrain
 pretrain_lr: 0.01
 pretrain_batch_size: 128
 
-# Federated Learning — large scale
-num_clients: 100
-clients_per_round: 10
-num_rounds: 30
-client_batch_size: 32
-client_local_steps: 20
-client_lr: 0.01        # local SGD learning rate (0.1 causes client drift with non-IID)
-fl_lr: 1.0             # server-side lr (1.0 = standard FedAvg)
+# Federated Learning — large scale (1K clients)
+num_clients: 1000
+clients_per_round: 50       # 5% participation rate
+num_rounds: 50
+client_batch_size: 16       # smaller batch for ~50 samples/client
+client_local_steps: 10
+client_lr: 0.01             # local SGD learning rate
+fl_lr: 1.0                  # server-side lr (1.0 = standard FedAvg)
 
 # LeakScore weights
 alpha: 1.0

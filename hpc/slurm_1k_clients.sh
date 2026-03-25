@@ -1,40 +1,67 @@
 #!/bin/bash
 #SBATCH --job-name=adaguard-1k
-#SBATCH --output=/scratch/projects/secure-distributed-ml/logs/1k-%j.out
-#SBATCH --error=/scratch/projects/secure-distributed-ml/logs/1k-%j.err
+#SBATCH --output=/scratch/projects/secure-distributed-ml/logs/1k-%A_%a.out
+#SBATCH --error=/scratch/projects/secure-distributed-ml/logs/1k-%A_%a.err
 #SBATCH --partition=general-long
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
+#SBATCH --array=0-11
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=maguir@oakland.edu
 # =============================================================
-# AdaGuard — 1000-Client Large-Scale Run
+# AdaGuard — 1000-Client Strategy Comparison (4 strategies x 3 seeds)
+#
+# Array layout (12 jobs):
+#   0-3:  seed=42   | none, fisher, maskcrypt, full
+#   4-7:  seed=123  | none, fisher, maskcrypt, full
+#   8-11: seed=456  | none, fisher, maskcrypt, full
+#
+# Override client count:
+#   NUM_CLIENTS=2000 CLIENTS_PER_ROUND=100 sbatch hpc/slurm_1k_clients.sh
+#
 # Submit: sbatch hpc/slurm_1k_clients.sh
 # =============================================================
 
-echo "Job $SLURM_JOB_ID started on $(hostname) at $(date)"
-echo "GPU: $(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader)"
+echo "Task $SLURM_ARRAY_TASK_ID of job $SLURM_ARRAY_JOB_ID on $(hostname) at $(date)"
+echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | tr '\n' ', ')"
 
 module load Python/3.10.14
 module load CUDA/12.4
 source /projects/secure-distributed-ml/venv/bin/activate
 
 export DATA_DIR="/scratch/projects/secure-distributed-ml/data"
+export PYTHONUNBUFFERED=1
 cd /projects/secure-distributed-ml/AdaGuard
 
-STRATEGY="${STRATEGY:-fisher}"
-OUTPUT="/scratch/projects/secure-distributed-ml/results/1k_${STRATEGY}_$(date +%Y%m%d_%H%M%S)_${SLURM_JOB_ID}.json"
+# Map array index to seed and strategy
+SEEDS=(42 42 42 42 123 123 123 123 456 456 456 456)
+STRATEGIES=(none fisher maskcrypt full none fisher maskcrypt full none fisher maskcrypt full)
 
-echo "1000-client run, strategy: $STRATEGY"
+SEED="${SEEDS[$SLURM_ARRAY_TASK_ID]}"
+STRATEGY="${STRATEGIES[$SLURM_ARRAY_TASK_ID]}"
+
+# Allow environment variable overrides for client count
+NC="${NUM_CLIENTS:-1000}"
+CPR="${CLIENTS_PER_ROUND:-50}"
+NR="${NUM_ROUNDS:-50}"
+
+RESULTS_DIR="/scratch/projects/secure-distributed-ml/results/1k_experiment_${SLURM_ARRAY_JOB_ID}"
+mkdir -p "$RESULTS_DIR"
+
+OUTPUT="${RESULTS_DIR}/${STRATEGY}_seed${SEED}_${NC}clients.json"
+
+echo "Seed: $SEED | Strategy: $STRATEGY | Clients: $NC | Per-round: $CPR | Rounds: $NR"
 echo "Output: $OUTPUT"
 
-export PYTHONUNBUFFERED=1
-
-python -u run_headless.py \
+stdbuf -oL -eL python -u run_headless.py \
     --config hpc/config_1k.yaml \
     --strategy "$STRATEGY" \
+    --seed "$SEED" \
+    --num-clients "$NC" \
+    --clients-per-round "$CPR" \
+    --num-rounds "$NR" \
     --output "$OUTPUT"
 
-echo "Job completed at $(date)"
+echo "Task $SLURM_ARRAY_TASK_ID ($STRATEGY, seed=$SEED, ${NC} clients) completed at $(date)"
