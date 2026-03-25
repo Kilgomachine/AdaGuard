@@ -43,6 +43,10 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     This function is designed to run in a thread with its own GPU assignment.
     It creates its own metric instances to avoid cross-thread state issues.
     """
+    import sys
+    t_start = time.perf_counter()
+    print(f"    [Client {cid:3d}] Starting on {gpu_device} ...", flush=True)
+
     # Train the client on assigned GPU
     # Temporarily override client device
     orig_device = client.device
@@ -51,7 +55,11 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     client.device = orig_device
 
     if result is None:
+        print(f"    [Client {cid:3d}] No data, skipped", flush=True)
         return None
+
+    t_train = time.perf_counter() - t_start
+    print(f"    [Client {cid:3d}] Training done ({t_train:.1f}s), computing metrics...", flush=True)
 
     gd = result['gradient_dict']           # raw gradient for LeakScore
     weight_delta = result.get('weight_delta', gd)  # weight delta for FedAvg
@@ -90,8 +98,13 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     entropy_r = entropy_metric.compute(
         flat, gradient_dict=gd, focus_layers=config['focus_layers'],
     )
-    metrics['entropy_compute_time'] = time.perf_counter() - t0
+    t_entropy = time.perf_counter() - t0
+    metrics['entropy_compute_time'] = t_entropy
     metrics.update(entropy_r)
+    print(f"    [Client {cid:3d}]   Entropy:    {t_entropy:5.1f}s  "
+          f"(Sh={entropy_r.get('shannon_leak_score', 0):.3f} "
+          f"Re={entropy_r.get('renyi_leak_score', 0):.3f} "
+          f"Min={entropy_r.get('min_entropy_leak_score', 0):.3f})", flush=True)
 
     # Label LeakScore (GLMIP + ConfGap + Cosine)
     if not skip_glmip:
@@ -109,10 +122,12 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
             config['mi_samples_per_class'],
             focus_layers=config['focus_layers'],
         )
-        metrics['glmip_compute_time'] = time.perf_counter() - t0
+        t_glmip = time.perf_counter() - t0
+        metrics['glmip_compute_time'] = t_glmip
         metrics['glmip_score'] = gl['glmip_score']
         class_means = gl.get('class_means', {})
         del glmip_model
+        print(f"    [Client {cid:3d}]   GLMIP:      {t_glmip:5.1f}s  (score={gl['glmip_score']:.3f})", flush=True)
     else:
         metrics['glmip_score'] = 0.0
         metrics['glmip_compute_time'] = 0.0
@@ -122,6 +137,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     metrics.update(cg)
     cos_r = cosine_metric.compute(class_means)
     metrics.update(cos_r)
+    print(f"    [Client {cid:3d}]   Label:             "
+          f"(ConfGap={cg.get('confidence_gap', 0):.3f} "
+          f"Cosine={cos_r.get('cosine_leak_score', 0):.3f})", flush=True)
 
     # Empirical LeakScore
     if not skip_empirical:
@@ -138,9 +156,14 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
             focus_layers=config['focus_layers'],
         )
         emp_r = emp_metric.compute(gd, flat, original_images=original_images)
-        metrics['empirical_compute_time'] = time.perf_counter() - t0
+        t_emp = time.perf_counter() - t0
+        metrics['empirical_compute_time'] = t_emp
         metrics.update(emp_r)
         del emp_model
+        print(f"    [Client {cid:3d}]   Empirical:  {t_emp:5.1f}s  "
+              f"(GI={emp_r.get('empirical_gradinversion', 0):.3f} "
+              f"NAS={emp_r.get('empirical_ginas', 0):.3f} "
+              f"GGCDM={emp_r.get('empirical_ggcdm', 0):.3f})", flush=True)
     else:
         metrics['empirical_gradinversion'] = 0.0
         metrics['empirical_ginas'] = 0.0
@@ -154,8 +177,12 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     # Fisher Information
     t0 = time.perf_counter()
     fisher_r = fisher_metric.compute(gd)
-    metrics['fisher_compute_time'] = time.perf_counter() - t0
+    t_fisher = time.perf_counter() - t0
+    metrics['fisher_compute_time'] = t_fisher
     metrics.update(fisher_r)
+    print(f"    [Client {cid:3d}]   Fisher:     {t_fisher:5.1f}s  "
+          f"(conc={fisher_r.get('fisher_concentration', 0):.4f} "
+          f"norm={fisher_r.get('fisher_round_norm', 0):.4f})", flush=True)
 
     # Fisher per-weight histogram
     if fisher_r.get('fisher_per_weight_norm') is not None and fisher_r['fisher_per_weight_norm'].numel() > 0:
@@ -169,8 +196,11 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     # MaskCrypt — paper-correct formula
     t0 = time.perf_counter()
     mc_r = maskcrypt_metric.compute(gd, exposed_w_gpu, local_weights)
-    metrics['maskcrypt_compute_time'] = time.perf_counter() - t0
+    t_mc = time.perf_counter() - t0
+    metrics['maskcrypt_compute_time'] = t_mc
     metrics.update(mc_r)
+    print(f"    [Client {cid:3d}]   MaskCrypt:  {t_mc:5.1f}s  "
+          f"(vuln={mc_r.get('maskcrypt_vulnerability', 0):.4f})", flush=True)
 
     # MaskCrypt per-weight histogram
     if mc_r.get('maskcrypt_per_weight_abs') is not None and mc_r['maskcrypt_per_weight_abs'].numel() > 0:
@@ -218,6 +248,11 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     metrics['empirical_avg'] = float(empirical_avg)
 
     metrics['loss'] = result['loss']
+
+    t_total = time.perf_counter() - t_start
+    print(f"    [Client {cid:3d}] ✓ Done in {t_total:.1f}s  |  "
+          f"LeakScore={combined:.4f}  Loss={result['loss']:.4f}  "
+          f"Magnitude={mag_r.get('magnitude_score', 0):.4f}", flush=True)
 
     return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights
 
@@ -272,9 +307,15 @@ class FederatedSimulator:
 
         Clients are processed in parallel across available GPUs.
         """
+        import sys
         nc = num_clients or self.config['clients_per_round']
         avail = list(self.clients.keys())
         selected = random.sample(avail, min(nc, len(avail)))
+
+        print(f"\n{'='*70}", flush=True)
+        print(f"  ROUND {rnd+1}  |  {len(selected)} clients  |  strategy={encryption_strategy}  "
+              f"|  GPUs={self.num_gpus}", flush=True)
+        print(f"{'='*70}", flush=True)
 
         # Track previous round's exposed weights for MaskCrypt paper formula
         if self.weights_before_round is not None:
@@ -358,6 +399,8 @@ class FederatedSimulator:
                 )
 
         # --- Server Aggregation ---
+        print(f"\n  [Server] Aggregating {len(all_gradients)} client updates...", flush=True)
+        sys.stdout.flush()
         if all_gradients:
             avg_grads = fedavg_aggregate(all_gradients)
             # Move aggregated grads to primary device for model update
@@ -372,7 +415,10 @@ class FederatedSimulator:
         }
 
         # --- Evaluate ---
+        print(f"  [Server] Evaluating global model...", flush=True)
         accuracy = self._evaluate()
+        print(f"  [Server] Round {rnd+1} accuracy: {accuracy*100:.1f}%", flush=True)
+        sys.stdout.flush()
 
         # --- Aggregate round metrics ---
         round_summary = self._summarize_round(rnd, client_results, accuracy)

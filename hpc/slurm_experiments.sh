@@ -49,7 +49,7 @@ OUTPUT="${RESULTS_DIR}/${STRATEGY}_seed${SEED}.json"
 
 echo "Seed: $SEED | Strategy: $STRATEGY | Output: $OUTPUT"
 
-python -u run_headless.py \
+stdbuf -oL -eL python -u run_headless.py \
     --config hpc/config_large.yaml \
     --strategy "$STRATEGY" \
     --seed "$SEED" \

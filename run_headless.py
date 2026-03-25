@@ -17,6 +17,11 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+# Force line-buffered stdout so `tail -f` sees output immediately
+if not os.environ.get('PYTHONUNBUFFERED'):
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
+    sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', buffering=1)
+
 import numpy as np
 import torch
 
