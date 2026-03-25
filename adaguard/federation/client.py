@@ -26,16 +26,20 @@ class FLClient:
         then returns the difference (global_weights - local_weights) as the
         gradient to send to the server. This is standard FedAvg.
 
+        IMPORTANT: Returns full state_dict delta (including BatchNorm running
+        stats) so the server can properly aggregate BN buffers. Without this,
+        BN running_mean/running_var stay at init values and eval accuracy = 10%.
+
         Also returns the raw single-batch gradient for LeakScore metrics
         (since privacy attacks target individual gradients, not weight deltas).
 
         Returns:
             dict with gradient_dict, flat_gradient, loss, outputs, labels,
-            local_weights, images — or None if no data available.
+            local_weights, local_state_dict, images — or None if no data.
         """
         bs = batch_size or self.config['client_batch_size']
         local_steps = self.config.get('client_local_steps', 1)
-        local_lr = self.config.get('fl_lr', 0.01)
+        local_lr = self.config.get('client_lr', self.config.get('fl_lr', 0.01))
 
         if not self.data_indices:
             return None
@@ -48,7 +52,7 @@ class FLClient:
         local_model.load_state_dict(global_state_dict)
         local_model.train()
 
-        # Save initial weights (global model weights)
+        # Save initial weights (parameters only, for pseudo-gradient)
         global_weights = {
             name: p.clone().detach()
             for name, p in local_model.named_parameters()
@@ -91,8 +95,8 @@ class FLClient:
         if last_outputs is None:
             return None
 
-        # Compute pseudo-gradient: (global_weights - local_weights) / lr
-        # This is what the server uses for FedAvg aggregation
+        # Compute pseudo-gradient: (global_weights - local_weights)
+        # This is what the server uses for FedAvg aggregation on parameters
         local_weights = {
             name: p.clone().detach()
             for name, p in local_model.named_parameters()
@@ -100,10 +104,15 @@ class FLClient:
 
         gradient_dict = {}
         for name in global_weights:
-            # pseudo-gradient = old - new (so server does: global -= lr * gradient)
+            # pseudo-gradient = old - new (so server does: global -= delta = local)
             gradient_dict[name] = (global_weights[name] - local_weights[name])
 
         flat_gradient = torch.cat([g.flatten() for g in gradient_dict.values()])
+
+        # Full state dict for proper FedAvg (includes BN running_mean/var)
+        local_state_dict = {
+            k: v.clone().detach() for k, v in local_model.state_dict().items()
+        }
 
         # Also compute single-batch raw gradient for LeakScore analysis
         # (privacy attacks target the actual gradient, not weight deltas)
@@ -120,12 +129,13 @@ class FLClient:
         raw_flat = torch.cat([g.flatten() for g in raw_gradient_dict.values()])
 
         return {
-            'gradient_dict': raw_gradient_dict,  # for LeakScore metrics
-            'weight_delta': gradient_dict,         # for FedAvg aggregation
+            'gradient_dict': raw_gradient_dict,   # for LeakScore metrics
+            'weight_delta': gradient_dict,          # param delta for encryption
             'flat_gradient': raw_flat,
             'loss': last_loss,
             'outputs': last_outputs,
             'labels': last_labels,
-            'local_weights': local_weights,
+            'local_weights': local_weights,         # param-only local weights
+            'local_state_dict': local_state_dict,   # full state including BN
             'images': last_images,
         }

@@ -25,7 +25,7 @@ from ..metrics import (
 from ..metrics.magnitude import GradientMagnitudeMetric
 from ..encryption import AdaptiveEncryptionController, FisherEncryptor, MaskCryptEncryptor
 from .client import FLClient
-from .aggregator import fedavg_aggregate, apply_gradient_update
+from .aggregator import fedavg_aggregate, fedavg_aggregate_state_dicts, apply_gradient_update
 
 
 def _get_gpu_devices():
@@ -254,7 +254,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
           f"LeakScore={combined:.4f}  Loss={result['loss']:.4f}  "
           f"Magnitude={mag_r.get('magnitude_score', 0):.4f}", flush=True)
 
-    return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights
+    local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
+
+    return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights, local_state_cpu
 
 
 class FederatedSimulator:
@@ -334,6 +336,7 @@ class FederatedSimulator:
 
         client_results = []
         all_gradients = []
+        all_state_dicts = []  # full state dicts for BN buffer averaging
 
         # Assign clients to GPUs round-robin
         gpu_assignments = {cid: self.gpu_devices[i % self.num_gpus]
@@ -347,7 +350,7 @@ class FederatedSimulator:
         clients_per_gpu = cpg
         max_workers = min(len(selected), self.num_gpus * clients_per_gpu)
         print(f"  [Parallel] {max_workers} workers across {self.num_gpus} GPUs "
-              f"({clients_per_gpu} clients/GPU)")
+              f"({clients_per_gpu} clients/GPU)", flush=True)
 
         if max_workers > 1:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -367,17 +370,18 @@ class FederatedSimulator:
                     try:
                         result = future.result()
                     except Exception as e:
-                        print(f"  [ERROR] Client {cid}: {e}")
+                        print(f"  [ERROR] Client {cid}: {e}", flush=True)
                         continue
 
                     if result is None:
                         continue
 
-                    cid, metrics, gd_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights = result
+                    cid, metrics, gd_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights, local_state_cpu = result
                     self._apply_encryption(
                         metrics, gd_cpu, encryption_strategy,
                         fisher_r, mc_r, exposed_w_gpu, local_weights,
                         all_gradients, client_results, cid,
+                        local_state_cpu, all_state_dicts,
                     )
         else:
             # Single GPU — run sequentially (same as before, avoids thread overhead)
@@ -391,19 +395,26 @@ class FederatedSimulator:
                 if result is None:
                     continue
 
-                cid, metrics, gd_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights = result
+                cid, metrics, gd_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights, local_state_cpu = result
                 self._apply_encryption(
                     metrics, gd_cpu, encryption_strategy,
                     fisher_r, mc_r, exposed_w_gpu, local_weights,
                     all_gradients, client_results, cid,
+                    local_state_cpu, all_state_dicts,
                 )
 
         # --- Server Aggregation ---
         print(f"\n  [Server] Aggregating {len(all_gradients)} client updates...", flush=True)
         sys.stdout.flush()
-        if all_gradients:
+        if all_state_dicts:
+            # Proper FedAvg: average full state dicts (params + BN buffers)
+            avg_state = fedavg_aggregate_state_dicts(all_state_dicts)
+            avg_state = {k: v.to(self.device) for k, v in avg_state.items()}
+            self.global_model.load_state_dict(avg_state)
+            print(f"  [Server] FedAvg applied (full state dict with BN stats)", flush=True)
+        elif all_gradients:
+            # Fallback: param-only update (no BN averaging)
             avg_grads = fedavg_aggregate(all_gradients)
-            # Move aggregated grads to primary device for model update
             avg_grads = {k: v.to(self.device) for k, v in avg_grads.items()}
             apply_gradient_update(
                 self.global_model, avg_grads, self.config['fl_lr'],
@@ -428,7 +439,8 @@ class FederatedSimulator:
 
     def _apply_encryption(self, metrics, gd_cpu, encryption_strategy,
                           fisher_r, mc_r, exposed_w_gpu, local_weights,
-                          all_gradients, client_results, cid):
+                          all_gradients, client_results, cid,
+                          local_state_cpu=None, all_state_dicts=None):
         """Apply encryption policy and add to results."""
         total_params = metrics.get('total_params', 0)
         combined = metrics.get('combined_leakscore', 0)
@@ -465,6 +477,8 @@ class FederatedSimulator:
             metrics['actual_pct_encrypted'] = enc_meta['pct_encrypted']
 
         all_gradients.append(protected_gd)
+        if all_state_dicts is not None and local_state_cpu:
+            all_state_dicts.append(local_state_cpu)
         client_results.append({'client_id': cid, 'metrics': metrics})
 
     def _evaluate(self):

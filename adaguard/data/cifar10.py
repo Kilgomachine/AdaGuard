@@ -8,8 +8,21 @@ import torchvision.transforms as transforms
 
 
 def load_cifar10(data_root='./data'):
-    """Load CIFAR-10 train and test datasets with standard normalization."""
-    transform = transforms.Compose([
+    """Load CIFAR-10 train and test datasets with standard normalization.
+
+    Training set uses data augmentation (random crop + horizontal flip) which is
+    essential for FL with small per-client datasets to prevent overfitting.
+    """
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=(0.4914, 0.4822, 0.4465),
+            std=(0.2023, 0.1994, 0.2010),
+        ),
+    ])
+    test_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(
             mean=(0.4914, 0.4822, 0.4465),
@@ -17,10 +30,10 @@ def load_cifar10(data_root='./data'):
         ),
     ])
     train_ds = datasets.CIFAR10(
-        root=data_root, train=True, download=True, transform=transform,
+        root=data_root, train=True, download=True, transform=train_transform,
     )
     test_ds = datasets.CIFAR10(
-        root=data_root, train=False, download=True, transform=transform,
+        root=data_root, train=False, download=True, transform=test_transform,
     )
     print(f"CIFAR-10 loaded — Train: {len(train_ds)}, Test: {len(test_ds)}")
     return train_ds, test_ds

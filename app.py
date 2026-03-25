@@ -93,7 +93,8 @@ with st.sidebar:
         config['clients_per_round'] = st.slider("Clients per Round", 1, config['num_clients'],
                                                  min(config['clients_per_round'], config['num_clients']))
         config['num_rounds'] = st.slider("FL Rounds", 1, 30, config['num_rounds'])
-        config['fl_lr'] = st.number_input("FL Learning Rate", 0.001, 0.1, config['fl_lr'], 0.001, format="%.3f")
+        config['client_lr'] = st.number_input("Client Learning Rate", 0.001, 0.1,
+                                                config.get('client_lr', 0.01), 0.001, format="%.3f")
         config['client_batch_size'] = st.selectbox("Client Batch Size", [1, 2, 4, 8, 16, 32, 64],
                                                     index=[1, 2, 4, 8, 16, 32, 64].index(config['client_batch_size']))
 

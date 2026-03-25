@@ -23,7 +23,8 @@ DEFAULT_CONFIG = {
     'num_rounds': 5,
     'client_batch_size': 4,
     'client_local_steps': 1,
-    'fl_lr': 0.01,
+    'client_lr': 0.01,   # local SGD learning rate
+    'fl_lr': 1.0,        # server-side lr (1.0 = standard FedAvg)
 
     # LeakScore weights (alpha, beta, gamma)
     'alpha': 1.0,
