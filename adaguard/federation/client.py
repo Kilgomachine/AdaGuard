@@ -64,7 +64,9 @@ class FLClient:
         )
 
         # Local SGD training for multiple steps
-        optimizer = optim.SGD(local_model.parameters(), lr=local_lr, momentum=0.9)
+        weight_decay = self.config.get('client_weight_decay', 1e-4)
+        optimizer = optim.SGD(local_model.parameters(), lr=local_lr,
+                              momentum=0.9, weight_decay=weight_decay)
         last_loss = 0.0
         last_outputs = None
         last_labels = None

@@ -129,7 +129,11 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     train_ds, test_ds = load_cifar10(data_root=os.environ.get('DATA_DIR', './data'))
 
     # Partition data
-    client_data_map = partition_data_non_iid(train_ds, config['num_clients'])
+    client_data_map = partition_data_non_iid(
+        train_ds, config['num_clients'],
+        classes_per_client=config.get('classes_per_client', 2),
+        min_samples=config.get('min_samples_per_client', 20),
+    )
 
     # Create model
     model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
@@ -282,7 +286,11 @@ def run_comparison(config_path, skip_glmip, skip_empirical, output_path,
     device = get_device()
 
     train_ds, test_ds = load_cifar10(data_root=os.environ.get('DATA_DIR', './data'))
-    client_data_map = partition_data_non_iid(train_ds, config['num_clients'])
+    client_data_map = partition_data_non_iid(
+        train_ds, config['num_clients'],
+        classes_per_client=config.get('classes_per_client', 2),
+        min_samples=config.get('min_samples_per_client', 20),
+    )
 
     base_model = create_model(config.get('model', 'smallcnn'), num_classes=config['num_classes']).to(device)
     base_state = base_model.state_dict()
