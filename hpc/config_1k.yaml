@@ -58,9 +58,11 @@ encryption_top_percent: 0.1
 # Focus layers
 focus_layers: ['fc.weight', 'fc.bias']
 
-# Parallelism — 4 V100s x 6 clients/GPU = 24 concurrent clients
-# ResNet-18 + batch_size=16 ~ 300MB/client, 6 x 300MB = 1.8GB/GPU (fits in 16GB)
-clients_per_gpu: 6
+# Parallelism — 4 V100s x 3 clients/GPU = 12 concurrent clients
+# With deferred attacks, each client only needs ~300MB for training.
+# 6/GPU causes GPU contention (threads serialize on default CUDA stream).
+# 3/GPU is the sweet spot: enough parallelism, less contention.
+clients_per_gpu: 3
 
 # Sweeps
 batch_sizes_experiment: [1, 4, 8, 16, 32, 64, 128, 256]

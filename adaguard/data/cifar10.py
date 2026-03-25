@@ -63,38 +63,43 @@ def partition_data_non_iid(dataset, num_clients, num_classes=10,
         random.shuffle(label_indices[c])
 
     client_data = defaultdict(list)
+    client_classes = {}
 
-    # Group clients by their class assignments
-    # Client cid gets classes: {(cid * classes_per_client + j) % num_classes}
-    # Multiple clients share the same class pair — split that class's data among them
-    class_pair_clients = defaultdict(list)  # class_pair -> list of client_ids
-    client_classes = {}  # cid -> list of assigned classes
-
+    # Assign each client a RANDOM subset of classes (much more diverse than sequential)
+    all_classes = list(range(num_classes))
     for cid in range(num_clients):
-        assigned = tuple(sorted([
-            (cid * classes_per_client + j) % num_classes
-            for j in range(classes_per_client)
-        ]))
+        assigned = tuple(sorted(random.sample(all_classes, classes_per_client)))
         client_classes[cid] = assigned
-        class_pair_clients[assigned].append(cid)
 
-    # For each class pair, distribute that pair's data evenly among clients
-    for pair, cids in class_pair_clients.items():
-        # Collect all indices for this class pair
-        pair_indices = []
-        for c in pair:
-            pair_indices.extend(label_indices[c])
-        random.shuffle(pair_indices)
+    # For each client, sample data from their assigned classes
+    # Use Dirichlet-like allocation: each client gets a roughly equal share
+    # of data from each of their assigned classes
+    samples_per_class = {}  # track how many samples we've allocated per class
+    for c in range(num_classes):
+        samples_per_class[c] = 0
 
-        # Split evenly among clients in this pair
-        n = len(cids)
-        chunk_size = len(pair_indices) // n
-        for i, cid in enumerate(cids):
-            start = i * chunk_size
-            end = start + chunk_size if i < n - 1 else len(pair_indices)
-            client_data[cid].extend(pair_indices[start:end])
+    # Count how many clients want each class
+    class_demand = defaultdict(int)
+    for cid, assigned in client_classes.items():
+        for c in assigned:
+            class_demand[c] += 1
 
-    # Ensure minimum samples (pad with random sampling from assigned classes)
+    # Allocate: each client gets (class_size / demand) samples from each class
+    for cid in range(num_clients):
+        for c in client_classes[cid]:
+            class_indices = label_indices[c]
+            n_available = len(class_indices)
+            demand = class_demand[c]
+            # Each client wanting this class gets an equal share
+            share = max(min_samples // classes_per_client, n_available // demand)
+            start = (samples_per_class[c]) % n_available
+            selected = []
+            for i in range(share):
+                selected.append(class_indices[(start + i) % n_available])
+            client_data[cid].extend(selected)
+            samples_per_class[c] += share
+
+    # Ensure minimum samples
     for cid in range(num_clients):
         if len(client_data[cid]) < min_samples:
             assigned = client_classes[cid]
@@ -109,9 +114,9 @@ def partition_data_non_iid(dataset, num_clients, num_classes=10,
 
     # Summary
     sizes = [len(v) for v in client_data.values()]
-    n_pairs = len(class_pair_clients)
+    n_combos = len(set(client_classes.values()))
     print(f"  Partitioned into {num_clients} clients: "
           f"{min(sizes)}-{max(sizes)} samples/client (mean {sum(sizes)/len(sizes):.0f}), "
-          f"{classes_per_client} classes/client, {n_pairs} unique class pairs")
+          f"{classes_per_client} classes/client, {n_combos} unique class combos")
 
     return dict(client_data)
