@@ -38,28 +38,38 @@ def _get_gpu_devices():
 
 # Thread-safe progress tracking
 import threading
-import logging
 
 _progress_lock = threading.Lock()
 _progress_count = 0
 _progress_total = 0
-_round_start_time = 0.0
 
-# Per-GPU tracking: which client is active on each GPU
-_gpu_active = {}  # gpu_device -> client_id
+# Worker ID pool: each thread grabs a worker ID from its GPU's pool
+_worker_ids = {}        # thread_id -> worker_id
+_gpu_worker_pools = {}  # gpu_str -> list of available worker IDs
+_worker_gpu_map = {}    # worker_id -> gpu_str (for display)
 
 
-def _log_gpu_status():
-    """Return a compact string showing what's running on each GPU."""
-    parts = []
-    for gpu in sorted(_gpu_active.keys(), key=str):
-        gpu_short = str(gpu).replace('cuda:', 'GPU')
-        cid = _gpu_active[gpu]
-        if cid is not None:
-            parts.append(f"{gpu_short}:C{cid}")
+def _acquire_worker(gpu_device):
+    """Grab a worker ID for this thread on the given GPU."""
+    gpu_str = str(gpu_device)
+    with _progress_lock:
+        pool = _gpu_worker_pools.get(gpu_str, [])
+        if pool:
+            wid = pool.pop(0)
         else:
-            parts.append(f"{gpu_short}:idle")
-    return "  ".join(parts)
+            wid = 0
+        _worker_ids[threading.get_ident()] = wid
+        return wid
+
+
+def _release_worker(gpu_device, wid):
+    """Return worker ID to the pool."""
+    gpu_str = str(gpu_device)
+    with _progress_lock:
+        if gpu_str in _gpu_worker_pools:
+            _gpu_worker_pools[gpu_str].append(wid)
+        if threading.get_ident() in _worker_ids:
+            del _worker_ids[threading.get_ident()]
 
 
 def _process_client(cid, client, global_state, batch_size, gpu_device, config,
@@ -74,9 +84,8 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     global _progress_count
     t_start = time.perf_counter()
 
-    # Mark this GPU as busy with this client
-    with _progress_lock:
-        _gpu_active[str(gpu_device)] = cid
+    # Acquire a worker ID for this thread
+    wid = _acquire_worker(gpu_device)
 
     # ── Phase 1: Local Training ──
     t_phase = time.perf_counter()
@@ -87,8 +96,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     t_train = time.perf_counter() - t_phase
 
     if result is None:
-        with _progress_lock:
-            _gpu_active[str(gpu_device)] = None
+        _release_worker(gpu_device, wid)
         return None
 
     gd = result['gradient_dict']
@@ -269,7 +277,6 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         _progress_count += 1
         done = _progress_count
         total = _progress_total
-        _gpu_active[str(gpu_device)] = None
 
     # Build timing breakdown string
     parts = [f"train={t_train:.0f}s"]
@@ -279,10 +286,11 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
             parts.append(f"{phase}={t:.0f}s")
     time_str = " ".join(parts)
 
-    gpu_short = str(gpu_device).replace('cuda:', 'GPU')
-    print(f"  {gpu_short} [{done:3d}/{total}] C{cid:<4d}  "
+    print(f"  W{wid:<2d} [{done:3d}/{total}] C{cid:<4d}  "
           f"loss={metrics['loss']:.4f}  leak={combined:.4f}  "
           f"| {t_total:.0f}s ({time_str})", flush=True)
+
+    _release_worker(gpu_device, wid)
 
     local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
 
@@ -350,10 +358,6 @@ class FederatedSimulator:
         with _progress_lock:
             _progress_count = 0
             _progress_total = len(selected)
-            _round_start_time = time.perf_counter()
-            # Initialize GPU tracking
-            for g in self.gpu_devices:
-                _gpu_active[str(g)] = None
 
         print(f"\n{'='*70}", flush=True)
         print(f"  ROUND {rnd+1}  |  {len(selected)} clients  |  strategy={encryption_strategy}  "
@@ -386,8 +390,7 @@ class FederatedSimulator:
                 k: v.to(gpu_dev) for k, v in exposed_w_cpu.items()
             }
 
-        # Assign clients to GPUs — group contiguously (not round-robin)
-        # GPU0 gets first chunk, GPU1 gets second chunk, etc.
+        # Assign clients to GPUs round-robin
         cpg = self.config.get('clients_per_gpu', 3)
         if cpg <= 0:
             cpg = max(1, len(selected) // self.num_gpus)
@@ -401,13 +404,31 @@ class FederatedSimulator:
             gpu_assignments[cid] = gpu_dev
             gpu_client_groups[str(gpu_dev)].append(cid)
 
-        # Print GPU assignment summary
+        # Set up worker ID pools: W1-W6 on cuda:0, W7-W12 on cuda:1, etc.
+        with _progress_lock:
+            _gpu_worker_pools.clear()
+            _worker_gpu_map.clear()
+            _worker_ids.clear()
+            wid = 1
+            for gpu_dev in self.gpu_devices:
+                gpu_str = str(gpu_dev)
+                _gpu_worker_pools[gpu_str] = []
+                for _ in range(clients_per_gpu):
+                    _gpu_worker_pools[gpu_str].append(wid)
+                    _worker_gpu_map[wid] = gpu_str
+                    wid += 1
+
+        # Print worker-GPU mapping with client assignments
         print(f"  {max_workers} workers ({clients_per_gpu}/GPU × {self.num_gpus} GPUs)", flush=True)
         print(f"  {'─'*66}", flush=True)
         for gpu_dev in self.gpu_devices:
-            clients_on_gpu = gpu_client_groups[str(gpu_dev)]
-            cids_str = ", ".join(f"C{c}" for c in clients_on_gpu)
-            print(f"  {str(gpu_dev):7s} → [{len(clients_on_gpu)} clients] {cids_str}", flush=True)
+            gpu_str = str(gpu_dev)
+            workers = _gpu_worker_pools[gpu_str]
+            clients_on_gpu = gpu_client_groups[gpu_str]
+            w_str = ", ".join(f"W{w}" for w in workers)
+            c_str = ", ".join(f"C{c}" for c in clients_on_gpu)
+            print(f"  {gpu_str:7s} │ Workers: {w_str}", flush=True)
+            print(f"          │ Clients: {c_str}", flush=True)
         print(f"  {'─'*66}", flush=True)
 
         if max_workers > 1:
