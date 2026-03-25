@@ -4,6 +4,7 @@ Orchestrates FL rounds with leakage detection and adaptive encryption.
 Supports multi-GPU parallelism for client processing.
 """
 
+import os
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -74,12 +75,11 @@ def _release_worker(gpu_device, wid):
 
 def _process_client(cid, client, global_state, batch_size, gpu_device, config,
                     global_model_state, exposed_w_gpu, skip_glmip, skip_empirical,
-                    train_dataset):
-    """Process a single client on a specific GPU. Returns (cid, metrics, protected_gd) or None.
+                    train_dataset, save_dir=None):
+    """Process a single client: train + fast metrics. Attacks are deferred.
 
-    This function is designed to run in a thread with its own GPU assignment.
-    It creates its own metric instances to avoid cross-thread state issues.
-    exposed_w_gpu should already be on the target GPU (pre-copied once per GPU).
+    Fast metrics (run inline): Entropy, Fisher, MaskCrypt, Magnitude, ConfGap, Cosine
+    Slow attacks (deferred): GLMIP, Empirical — client data saved to save_dir for later.
     """
     global _progress_count
     t_start = time.perf_counter()
@@ -114,26 +114,14 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     local_weights = {k: v.to(gpu_device) for k, v in local_weights.items()}
     if original_images is not None:
         original_images = original_images.to(gpu_device)
-    # exposed_w_gpu is already on the correct GPU (pre-copied in run_round)
 
-    # Create per-thread metric instances on this GPU
-    entropy_metric = EntropyLeakScoreMetric(num_bins=config['entropy_bins'])
-    fisher_metric = FisherInformationMetric(
-        topk=config['fisher_topk'], enc_pct=config['encryption_top_percent'],
-    )
-    maskcrypt_metric = MaskCryptMetric(enc_pct=config['encryption_top_percent'])
-    magnitude_metric = GradientMagnitudeMetric()
-    conf_gap_metric = ConfidenceGapMetric()
-    cosine_metric = CosineSimilarityMetric()
-    combined_metric = CombinedLeakScore(
-        alpha=config['alpha'], beta=config['beta'], gamma=config['gamma'],
-    )
-
+    # ── Fast metrics (all <1s each) ──
     metrics = {}
-    timing = {}  # separate timing dict for clean logging
+    timing = {}
 
-    # ── Phase 2: Entropy ──
+    # Entropy
     t0 = time.perf_counter()
+    entropy_metric = EntropyLeakScoreMetric(num_bins=config['entropy_bins'])
     entropy_r = entropy_metric.compute(
         flat, gradient_dict=gd, focus_layers=config['focus_layers'],
     )
@@ -141,69 +129,16 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     metrics['entropy_compute_time'] = timing['entropy']
     metrics.update(entropy_r)
 
-    # ── Phase 3: GLMIP ──
-    if not skip_glmip:
-        t0 = time.perf_counter()
-        glmip_model = create_model(
-            config.get('model', 'smallcnn'), num_classes=config['num_classes'],
-        ).to(gpu_device)
-        glmip_model.load_state_dict(global_model_state)
-        glmip_metric = GLMIPMetric()
-        criterion = nn.CrossEntropyLoss()
-        gl = glmip_metric.compute(
-            glmip_model, train_dataset, gpu_device,
-            criterion, config['num_classes'],
-            config['mi_samples_per_class'],
-            focus_layers=config['focus_layers'],
-        )
-        timing['glmip'] = time.perf_counter() - t0
-        metrics['glmip_compute_time'] = timing['glmip']
-        metrics['glmip_score'] = gl['glmip_score']
-        class_means = gl.get('class_means', {})
-        del glmip_model
-    else:
-        metrics['glmip_score'] = 0.0
-        metrics['glmip_compute_time'] = 0.0
-        timing['glmip'] = 0.0
-        class_means = {}
-
+    # Confidence Gap
+    conf_gap_metric = ConfidenceGapMetric()
     cg = conf_gap_metric.compute(outputs)
     metrics.update(cg)
-    cos_r = cosine_metric.compute(class_means)
-    metrics.update(cos_r)
 
-    # ── Phase 4: Empirical ──
-    if not skip_empirical:
-        t0 = time.perf_counter()
-        emp_model = create_model(
-            config.get('model', 'smallcnn'), num_classes=config['num_classes'],
-        ).to(gpu_device)
-        emp_model.load_state_dict(global_model_state)
-        criterion = nn.CrossEntropyLoss()
-        emp_metric = EmpiricalLeakScoreMetric(
-            emp_model, criterion, gpu_device,
-            n_iter=config['empirical_iterations'],
-            lr=config['empirical_lr'],
-            focus_layers=config['focus_layers'],
-        )
-        emp_r = emp_metric.compute(gd, flat, original_images=original_images)
-        timing['empirical'] = time.perf_counter() - t0
-        metrics['empirical_compute_time'] = timing['empirical']
-        metrics.update(emp_r)
-        del emp_model
-    else:
-        metrics['empirical_gradinversion'] = 0.0
-        metrics['empirical_ginas'] = 0.0
-        metrics['empirical_ggcdm'] = 0.0
-        metrics['empirical_mean'] = 0.0
-        metrics['empirical_compute_time'] = 0.0
-        metrics['recon_mse'] = 0.0
-        metrics['recon_psnr'] = 0.0
-        metrics['recon_ssim'] = 0.0
-        timing['empirical'] = 0.0
-
-    # ── Phase 5: Fisher ──
+    # Fisher
     t0 = time.perf_counter()
+    fisher_metric = FisherInformationMetric(
+        topk=config['fisher_topk'], enc_pct=config['encryption_top_percent'],
+    )
     fisher_r = fisher_metric.compute(gd)
     timing['fisher'] = time.perf_counter() - t0
     metrics['fisher_compute_time'] = timing['fisher']
@@ -217,8 +152,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['fisher_per_weight_median'] = fw.median().item()
         metrics['fisher_per_weight_p95'] = torch.quantile(fw.float(), 0.95).item()
 
-    # ── Phase 6: MaskCrypt ──
+    # MaskCrypt
     t0 = time.perf_counter()
+    maskcrypt_metric = MaskCryptMetric(enc_pct=config['encryption_top_percent'])
     mc_r = maskcrypt_metric.compute(gd, exposed_w_gpu, local_weights)
     timing['maskcrypt'] = time.perf_counter() - t0
     metrics['maskcrypt_compute_time'] = timing['maskcrypt']
@@ -235,6 +171,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['maskcrypt_per_weight_p95'] = torch.quantile(mw.float(), 0.95).item()
 
     # Gradient Magnitude
+    magnitude_metric = GradientMagnitudeMetric()
     mag_r = magnitude_metric.compute(gd)
     metrics.update(mag_r)
 
@@ -245,21 +182,115 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['fisher_per_param_us'] = metrics['fisher_compute_time'] * 1e6 / total_params
         metrics['maskcrypt_per_param_us'] = metrics['maskcrypt_compute_time'] * 1e6 / total_params
 
+    # ── GLMIP + Empirical: run inline OR defer ──
+    if save_dir is not None:
+        # DEFERRED MODE: save data for later attack computation
+        # Set placeholder scores (will be filled in by run_attacks.py)
+        metrics['glmip_score'] = 0.0
+        metrics['glmip_compute_time'] = 0.0
+        metrics['cosine_leak_score'] = 0.0
+        metrics['mean_cosine_similarity'] = 0.0
+        metrics['empirical_gradinversion'] = 0.0
+        metrics['empirical_ginas'] = 0.0
+        metrics['empirical_ggcdm'] = 0.0
+        metrics['empirical_mean'] = 0.0
+        metrics['empirical_compute_time'] = 0.0
+        metrics['recon_mse'] = 0.0
+        metrics['recon_psnr'] = 0.0
+        metrics['recon_ssim'] = 0.0
+
+        # Save what the attacks need: gradient_dict, flat_gradient, images, outputs
+        client_save = {
+            'gradient_dict': {k: v.cpu() for k, v in gd.items()},
+            'flat_gradient': flat.cpu(),
+            'outputs': outputs.cpu(),
+        }
+        if original_images is not None:
+            client_save['original_images'] = original_images.cpu()
+
+        import os
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(client_save, os.path.join(save_dir, f'client_{cid}.pt'))
+        timing['glmip'] = 0.0
+        timing['empirical'] = 0.0
+    else:
+        # INLINE MODE: run attacks now (slower but complete)
+        if not skip_glmip:
+            t0 = time.perf_counter()
+            glmip_model = create_model(
+                config.get('model', 'smallcnn'), num_classes=config['num_classes'],
+            ).to(gpu_device)
+            glmip_model.load_state_dict(global_model_state)
+            glmip_metric = GLMIPMetric()
+            criterion = nn.CrossEntropyLoss()
+            gl = glmip_metric.compute(
+                glmip_model, train_dataset, gpu_device,
+                criterion, config['num_classes'],
+                config['mi_samples_per_class'],
+                focus_layers=config['focus_layers'],
+            )
+            timing['glmip'] = time.perf_counter() - t0
+            metrics['glmip_compute_time'] = timing['glmip']
+            metrics['glmip_score'] = gl['glmip_score']
+            class_means = gl.get('class_means', {})
+            del glmip_model
+            cosine_metric = CosineSimilarityMetric()
+            cos_r = cosine_metric.compute(class_means)
+            metrics.update(cos_r)
+        else:
+            metrics['glmip_score'] = 0.0
+            metrics['glmip_compute_time'] = 0.0
+            metrics['cosine_leak_score'] = 0.0
+            metrics['mean_cosine_similarity'] = 0.0
+            timing['glmip'] = 0.0
+
+        if not skip_empirical:
+            t0 = time.perf_counter()
+            emp_model = create_model(
+                config.get('model', 'smallcnn'), num_classes=config['num_classes'],
+            ).to(gpu_device)
+            emp_model.load_state_dict(global_model_state)
+            criterion = nn.CrossEntropyLoss()
+            emp_metric = EmpiricalLeakScoreMetric(
+                emp_model, criterion, gpu_device,
+                n_iter=config['empirical_iterations'],
+                lr=config['empirical_lr'],
+                focus_layers=config['focus_layers'],
+            )
+            emp_r = emp_metric.compute(gd, flat, original_images=original_images)
+            timing['empirical'] = time.perf_counter() - t0
+            metrics['empirical_compute_time'] = timing['empirical']
+            metrics.update(emp_r)
+            del emp_model
+        else:
+            metrics['empirical_gradinversion'] = 0.0
+            metrics['empirical_ginas'] = 0.0
+            metrics['empirical_ggcdm'] = 0.0
+            metrics['empirical_mean'] = 0.0
+            metrics['empirical_compute_time'] = 0.0
+            metrics['recon_mse'] = 0.0
+            metrics['recon_psnr'] = 0.0
+            metrics['recon_ssim'] = 0.0
+            timing['empirical'] = 0.0
+
     # Combined LeakScore
+    combined_metric = CombinedLeakScore(
+        alpha=config['alpha'], beta=config['beta'], gamma=config['gamma'],
+    )
     entropy_avg = np.mean([
         metrics['shannon_leak_score'],
         metrics['renyi_leak_score'],
         metrics['min_entropy_leak_score'],
     ])
     label_avg = np.mean([
-        metrics['glmip_score'],
+        metrics.get('glmip_score', 0.0),
         metrics['confidence_gap'],
         metrics.get('cosine_leak_score', 0.0),
     ])
     empirical_avg = np.mean([
-        metrics['empirical_gradinversion'],
-        metrics['empirical_ginas'],
-        metrics['empirical_ggcdm'],
+        metrics.get('empirical_gradinversion', 0.0),
+        metrics.get('empirical_ginas', 0.0),
+        metrics.get('empirical_ggcdm', 0.0),
     ])
 
     combined = combined_metric.compute(entropy_avg, label_avg, empirical_avg)
@@ -272,13 +303,12 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     t_total = time.perf_counter() - t_start
     metrics['client_time'] = t_total
 
-    # ── Print completion with per-phase timing breakdown ──
+    # ── Print completion ──
     with _progress_lock:
         _progress_count += 1
         done = _progress_count
         total = _progress_total
 
-    # Build timing breakdown string
     parts = [f"train={t_train:.0f}s"]
     for phase in ['entropy', 'glmip', 'empirical', 'fisher', 'maskcrypt']:
         t = timing.get(phase, 0)
@@ -286,6 +316,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
             parts.append(f"{phase}={t:.0f}s")
     time_str = " ".join(parts)
 
+    gpu_short = str(gpu_device).replace('cuda:', 'GPU')
     print(f"  W{wid:<2d} [{done:3d}/{total}] C{cid:<4d}  "
           f"loss={metrics['loss']:.4f}  leak={combined:.4f}  "
           f"| {t_total:.0f}s ({time_str})", flush=True)
@@ -294,7 +325,6 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
     local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
 
-    # Return exposed_w_gpu back (it's shared, not per-client)
     return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights, local_state_cpu
 
 
@@ -343,8 +373,13 @@ class FederatedSimulator:
         self.weights_previous_round = None
 
     def run_round(self, rnd, encryption_strategy='fisher', num_clients=None,
-                  batch_size=None, skip_glmip=False, skip_empirical=False):
+                  batch_size=None, skip_glmip=False, skip_empirical=False,
+                  save_dir=None):
         """Run one FL round with full AdaGuard pipeline.
+
+        If save_dir is set, GLMIP and Empirical attacks are deferred —
+        client gradient data is saved to save_dir/round_N/ for later processing
+        via run_attacks.py. Training + fast metrics still run inline.
 
         Clients are processed in parallel across available GPUs.
         """
@@ -431,6 +466,14 @@ class FederatedSimulator:
             print(f"          │ Clients: {c_str}", flush=True)
         print(f"  {'─'*66}", flush=True)
 
+        # Per-round save directory for deferred attacks
+        round_save_dir = None
+        if save_dir is not None:
+            round_save_dir = os.path.join(save_dir, f'round_{rnd}')
+            os.makedirs(round_save_dir, exist_ok=True)
+            # Also save the global model state for later attack use
+            torch.save(global_model_state, os.path.join(round_save_dir, 'global_model.pt'))
+
         if max_workers > 1:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {}
@@ -442,6 +485,7 @@ class FederatedSimulator:
                         global_state, batch_size, gpu_dev, self.config,
                         global_model_state, ew_gpu,
                         skip_glmip, skip_empirical, self.train_dataset,
+                        round_save_dir,
                     )
                     futures[future] = cid
 
@@ -474,6 +518,7 @@ class FederatedSimulator:
                     cid, self.clients[cid], global_state, batch_size,
                     gpu_dev, self.config, global_model_state, ew_gpu,
                     skip_glmip, skip_empirical, self.train_dataset,
+                    round_save_dir,
                 )
                 if result is None:
                     continue

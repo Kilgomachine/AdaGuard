@@ -48,13 +48,18 @@ CPR="${CLIENTS_PER_ROUND:-50}"
 NR="${NUM_ROUNDS:-50}"
 
 RESULTS_DIR="/scratch/projects/secure-distributed-ml/results/1k_experiment_${SLURM_ARRAY_JOB_ID}"
-mkdir -p "$RESULTS_DIR"
+LOGS_DIR="/scratch/projects/secure-distributed-ml/logs"
+mkdir -p "$RESULTS_DIR" "$LOGS_DIR"
 
 OUTPUT="${RESULTS_DIR}/${STRATEGY}_seed${SEED}_${NC}clients.json"
+LOGFILE="${LOGS_DIR}/adaguard_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.log"
 
 echo "Seed: $SEED | Strategy: $STRATEGY | Clients: $NC | Per-round: $CPR | Rounds: $NR"
 echo "Output: $OUTPUT"
+echo "Log: $LOGFILE"
 
+# --defer-attacks: train fast, save client data, run attacks later via run_attacks.py
+# --log: persistent log file (survives SSH disconnects — just cat $LOGFILE)
 stdbuf -oL -eL python -u run_headless.py \
     --config hpc/config_1k.yaml \
     --strategy "$STRATEGY" \
@@ -62,6 +67,11 @@ stdbuf -oL -eL python -u run_headless.py \
     --num-clients "$NC" \
     --clients-per-round "$CPR" \
     --num-rounds "$NR" \
+    --defer-attacks \
+    --log "$LOGFILE" \
     --output "$OUTPUT"
 
 echo "Task $SLURM_ARRAY_TASK_ID ($STRATEGY, seed=$SEED, ${NC} clients) completed at $(date)"
+echo ""
+echo "To run attacks on saved data:"
+echo "  python run_attacks.py --data-dir ${RESULTS_DIR}/client_data_${STRATEGY}_seed${SEED}_${NC}clients --config hpc/config_1k.yaml --results $OUTPUT"

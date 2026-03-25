@@ -22,6 +22,29 @@ if not os.environ.get('PYTHONUNBUFFERED'):
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
     sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', buffering=1)
 
+
+class TeeLogger:
+    """Write to both stdout and a log file. Survives SSH disconnects."""
+    def __init__(self, log_path):
+        self.terminal = sys.stdout
+        os.makedirs(os.path.dirname(log_path) or '.', exist_ok=True)
+        self.log = open(log_path, 'a', buffering=1)  # line-buffered
+        self.log.write(f"\n{'='*70}\n")
+        self.log.write(f"  Session started: {datetime.now().isoformat()}\n")
+        self.log.write(f"{'='*70}\n")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+    def fileno(self):
+        return self.terminal.fileno()
+
 import numpy as np
 import torch
 
@@ -48,7 +71,8 @@ def make_serializable(obj):
 def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_path,
                       pretrain_override=None, seed_override=None,
                       num_clients_override=None, clients_per_round_override=None,
-                      num_rounds_override=None, client_lr_override=None):
+                      num_rounds_override=None, client_lr_override=None,
+                      defer_attacks=False):
     """Run FL rounds and save results."""
     from adaguard.config import load_config, set_seed, get_device
     from adaguard.models import create_model
@@ -90,12 +114,15 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     print(f"  Client LR    {config.get('client_lr', config.get('fl_lr', 0.01))}")
     print(f"  Local steps  {config.get('client_local_steps', 1)}")
     print(f"  Seed         {config['seed']}")
+    flags = []
     if skip_glmip:
-        print(f"  [skip GLMIP]", end='')
+        flags.append("skip GLMIP")
     if skip_empirical:
-        print(f"  [skip Empirical]", end='')
-    if skip_glmip or skip_empirical:
-        print()
+        flags.append("skip Empirical")
+    if defer_attacks:
+        flags.append("DEFER ATTACKS (train only, run attacks later)")
+    if flags:
+        print(f"  Flags      {', '.join(flags)}")
     print(f"{'='*70}\n")
 
     # Load data
@@ -122,6 +149,14 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     print(f"Pre-training took {pretrain_time:.1f}s")
 
     # Run FL rounds
+    # If deferring attacks, save client data next to output for later processing
+    attack_save_dir = None
+    if defer_attacks:
+        attack_save_dir = str(Path(output_path).parent / f'client_data_{Path(output_path).stem}')
+        print(f"  Attack data will be saved to: {attack_save_dir}")
+        skip_glmip = True
+        skip_empirical = True
+
     print(f"\n=== Federated Learning ({config['num_rounds']} rounds) ===")
     round_results = []
     total_start = time.time()
@@ -133,6 +168,7 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
             encryption_strategy=strategy,
             skip_glmip=skip_glmip,
             skip_empirical=skip_empirical,
+            save_dir=attack_save_dir,
         )
         rnd_time = time.time() - rnd_start
 
@@ -333,8 +369,17 @@ def main():
                         help='Override number of FL rounds')
     parser.add_argument('--client-lr', type=float, default=None,
                         help='Override client local learning rate')
+    parser.add_argument('--defer-attacks', action='store_true',
+                        help='Defer GLMIP/Empirical attacks — train fast, run attacks later via run_attacks.py')
+    parser.add_argument('--log', type=str, default=None,
+                        help='Path to persistent log file (survives SSH disconnects)')
 
     args = parser.parse_args()
+
+    # Set up persistent logging if requested
+    if args.log:
+        sys.stdout = TeeLogger(args.log)
+        sys.stderr = sys.stdout
 
     # Allow CLI override of pretrain epochs
     pretrain_override = args.pretrain_epochs
@@ -351,7 +396,8 @@ def main():
                           num_clients_override=args.num_clients,
                           clients_per_round_override=args.clients_per_round,
                           num_rounds_override=args.num_rounds,
-                          client_lr_override=args.client_lr)
+                          client_lr_override=args.client_lr,
+                          defer_attacks=args.defer_attacks)
 
 
 if __name__ == '__main__':
