@@ -54,8 +54,9 @@ encryption_top_percent: 0.1
 # Focus layers
 focus_layers: ['fc.weight', 'fc.bias']
 
-# Parallelism — 4 V100s, 2 clients/GPU to avoid OOM with 50 concurrent
-clients_per_gpu: 2
+# Parallelism — 4 V100s x 6 clients/GPU = 24 concurrent clients
+# ResNet-18 + batch_size=16 ~ 300MB/client, 6 x 300MB = 1.8GB/GPU (fits in 16GB)
+clients_per_gpu: 6
 
 # Sweeps
 batch_sizes_experiment: [1, 4, 8, 16, 32, 64, 128, 256]

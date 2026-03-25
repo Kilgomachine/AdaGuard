@@ -53,8 +53,8 @@ batch_sizes_experiment: [1, 4, 8, 16, 32, 64, 128]
 noise_levels: [0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
 client_counts_experiment: [1, 5, 10, 50, 100, 500, 1000]
 
-# Parallelism
-clients_per_gpu: 3  # max concurrent clients per GPU (0 = auto)
+# Parallelism — 4 V100s x 6 clients/GPU = 24 concurrent workers
+clients_per_gpu: 6
 
 # Seed
 seed: 42
