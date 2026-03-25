@@ -36,11 +36,30 @@ def _get_gpu_devices():
 
 
 
-# Thread-safe counter for progress display
+# Thread-safe progress tracking
 import threading
+import logging
+
 _progress_lock = threading.Lock()
 _progress_count = 0
 _progress_total = 0
+_round_start_time = 0.0
+
+# Per-GPU tracking: which client is active on each GPU
+_gpu_active = {}  # gpu_device -> client_id
+
+
+def _log_gpu_status():
+    """Return a compact string showing what's running on each GPU."""
+    parts = []
+    for gpu in sorted(_gpu_active.keys(), key=str):
+        gpu_short = str(gpu).replace('cuda:', 'GPU')
+        cid = _gpu_active[gpu]
+        if cid is not None:
+            parts.append(f"{gpu_short}:C{cid}")
+        else:
+            parts.append(f"{gpu_short}:idle")
+    return "  ".join(parts)
 
 
 def _process_client(cid, client, global_state, batch_size, gpu_device, config,
@@ -54,17 +73,29 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     global _progress_count
     t_start = time.perf_counter()
 
-    # Train the client on assigned GPU
+    # Mark this GPU as busy with this client
+    with _progress_lock:
+        _gpu_active[str(gpu_device)] = cid
+        gpu_status = _log_gpu_status()
+        done = _progress_count
+        total = _progress_total
+    print(f"  [{done:3d}/{total}] >>> Client {cid:3d} STARTED on {gpu_device}   [{gpu_status}]", flush=True)
+
+    # ── Phase 1: Local Training ──
+    t_phase = time.perf_counter()
     orig_device = client.device
     client.device = gpu_device
     result = client.train_step(global_state, batch_size)
     client.device = orig_device
+    t_train = time.perf_counter() - t_phase
 
     if result is None:
+        with _progress_lock:
+            _gpu_active[str(gpu_device)] = None
         return None
 
-    gd = result['gradient_dict']           # raw gradient for LeakScore
-    weight_delta = result.get('weight_delta', gd)  # weight delta for FedAvg
+    gd = result['gradient_dict']
+    weight_delta = result.get('weight_delta', gd)
     flat = result['flat_gradient']
     outputs = result['outputs']
     local_weights = result.get('local_weights', {})
@@ -72,7 +103,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
     # Move tensors to assigned GPU
     gd = {k: v.to(gpu_device) for k, v in gd.items()}
-    weight_delta_cpu = {k: v.cpu() for k, v in weight_delta.items()}  # keep on CPU for aggregation
+    weight_delta_cpu = {k: v.cpu() for k, v in weight_delta.items()}
     flat = flat.to(gpu_device)
     outputs = outputs.to(gpu_device)
     local_weights = {k: v.to(gpu_device) for k, v in local_weights.items()}
@@ -94,16 +125,18 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     )
 
     metrics = {}
+    timing = {}  # separate timing dict for clean logging
 
-    # Entropy LeakScore
+    # ── Phase 2: Entropy ──
     t0 = time.perf_counter()
     entropy_r = entropy_metric.compute(
         flat, gradient_dict=gd, focus_layers=config['focus_layers'],
     )
-    metrics['entropy_compute_time'] = time.perf_counter() - t0
+    timing['entropy'] = time.perf_counter() - t0
+    metrics['entropy_compute_time'] = timing['entropy']
     metrics.update(entropy_r)
 
-    # Label LeakScore (GLMIP + ConfGap + Cosine)
+    # ── Phase 3: GLMIP ──
     if not skip_glmip:
         t0 = time.perf_counter()
         glmip_model = create_model(
@@ -118,13 +151,15 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
             config['mi_samples_per_class'],
             focus_layers=config['focus_layers'],
         )
-        metrics['glmip_compute_time'] = time.perf_counter() - t0
+        timing['glmip'] = time.perf_counter() - t0
+        metrics['glmip_compute_time'] = timing['glmip']
         metrics['glmip_score'] = gl['glmip_score']
         class_means = gl.get('class_means', {})
         del glmip_model
     else:
         metrics['glmip_score'] = 0.0
         metrics['glmip_compute_time'] = 0.0
+        timing['glmip'] = 0.0
         class_means = {}
 
     cg = conf_gap_metric.compute(outputs)
@@ -132,7 +167,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     cos_r = cosine_metric.compute(class_means)
     metrics.update(cos_r)
 
-    # Empirical LeakScore
+    # ── Phase 4: Empirical ──
     if not skip_empirical:
         t0 = time.perf_counter()
         emp_model = create_model(
@@ -147,7 +182,8 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
             focus_layers=config['focus_layers'],
         )
         emp_r = emp_metric.compute(gd, flat, original_images=original_images)
-        metrics['empirical_compute_time'] = time.perf_counter() - t0
+        timing['empirical'] = time.perf_counter() - t0
+        metrics['empirical_compute_time'] = timing['empirical']
         metrics.update(emp_r)
         del emp_model
     else:
@@ -159,14 +195,15 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['recon_mse'] = 0.0
         metrics['recon_psnr'] = 0.0
         metrics['recon_ssim'] = 0.0
+        timing['empirical'] = 0.0
 
-    # Fisher Information
+    # ── Phase 5: Fisher ──
     t0 = time.perf_counter()
     fisher_r = fisher_metric.compute(gd)
-    metrics['fisher_compute_time'] = time.perf_counter() - t0
+    timing['fisher'] = time.perf_counter() - t0
+    metrics['fisher_compute_time'] = timing['fisher']
     metrics.update(fisher_r)
 
-    # Fisher per-weight histogram
     if fisher_r.get('fisher_per_weight_norm') is not None and fisher_r['fisher_per_weight_norm'].numel() > 0:
         fw = fisher_r['fisher_per_weight_norm']
         metrics['fisher_hist'] = torch.histc(fw.float(), bins=100, min=0, max=max(fw.max().item(), 1e-12)).tolist()
@@ -175,13 +212,13 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['fisher_per_weight_median'] = fw.median().item()
         metrics['fisher_per_weight_p95'] = torch.quantile(fw.float(), 0.95).item()
 
-    # MaskCrypt — paper-correct formula
+    # ── Phase 6: MaskCrypt ──
     t0 = time.perf_counter()
     mc_r = maskcrypt_metric.compute(gd, exposed_w_gpu, local_weights)
-    metrics['maskcrypt_compute_time'] = time.perf_counter() - t0
+    timing['maskcrypt'] = time.perf_counter() - t0
+    metrics['maskcrypt_compute_time'] = timing['maskcrypt']
     metrics.update(mc_r)
 
-    # MaskCrypt per-weight histogram
     if mc_r.get('maskcrypt_per_weight_abs') is not None and mc_r['maskcrypt_per_weight_abs'].numel() > 0:
         mw = mc_r['maskcrypt_per_weight_abs']
         max_mw = max(mw.max().item(), 1e-12)
@@ -227,14 +264,28 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     metrics['empirical_avg'] = float(empirical_avg)
 
     metrics['loss'] = result['loss']
-    metrics['client_time'] = time.perf_counter() - t_start
+    t_total = time.perf_counter() - t_start
+    metrics['client_time'] = t_total
 
-    # Compact progress update (thread-safe)
+    # ── Print completion with per-phase timing breakdown ──
     with _progress_lock:
         _progress_count += 1
         done = _progress_count
         total = _progress_total
-    print(f"  [{done:3d}/{total}] Client {cid:3d} done  ({metrics['client_time']:.1f}s on {gpu_device})", flush=True)
+        _gpu_active[str(gpu_device)] = None
+        gpu_status = _log_gpu_status()
+
+    # Build timing breakdown string
+    parts = [f"train={t_train:.0f}s"]
+    for phase in ['entropy', 'glmip', 'empirical', 'fisher', 'maskcrypt']:
+        t = timing.get(phase, 0)
+        if t > 0.1:
+            parts.append(f"{phase}={t:.0f}s")
+    time_str = " ".join(parts)
+
+    print(f"  [{done:3d}/{total}] <<< Client {cid:3d} DONE    on {gpu_device}  "
+          f"loss={metrics['loss']:.4f}  leak={combined:.4f}  "
+          f"({t_total:.0f}s: {time_str})   [{gpu_status}]", flush=True)
 
     local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
 
@@ -301,8 +352,15 @@ class FederatedSimulator:
         with _progress_lock:
             _progress_count = 0
             _progress_total = len(selected)
+            _round_start_time = time.perf_counter()
+            # Initialize GPU tracking
+            for g in self.gpu_devices:
+                _gpu_active[str(g)] = None
 
-        print(f"\n  Processing {len(selected)} clients across {self.num_gpus} GPUs ...", flush=True)
+        print(f"\n{'='*70}", flush=True)
+        print(f"  ROUND {rnd+1}  |  {len(selected)} clients  |  strategy={encryption_strategy}  "
+              f"|  {self.num_gpus} GPUs", flush=True)
+        print(f"{'='*70}", flush=True)
 
         # Track previous round's exposed weights for MaskCrypt paper formula
         if self.weights_before_round is not None:
