@@ -77,10 +77,6 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     # Mark this GPU as busy with this client
     with _progress_lock:
         _gpu_active[str(gpu_device)] = cid
-        gpu_status = _log_gpu_status()
-        done = _progress_count
-        total = _progress_total
-    print(f"  [{done:3d}/{total}] >>> C{cid:<4d} on {gpu_device}   [{gpu_status}]", flush=True)
 
     # ── Phase 1: Local Training ──
     t_phase = time.perf_counter()
@@ -274,7 +270,6 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         done = _progress_count
         total = _progress_total
         _gpu_active[str(gpu_device)] = None
-        gpu_status = _log_gpu_status()
 
     # Build timing breakdown string
     parts = [f"train={t_train:.0f}s"]
@@ -285,9 +280,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     time_str = " ".join(parts)
 
     gpu_short = str(gpu_device).replace('cuda:', 'GPU')
-    print(f"  [{done:3d}/{total}] <<< C{cid:<4d} on {gpu_device}  "
+    print(f"  {gpu_short} [{done:3d}/{total}] C{cid:<4d}  "
           f"loss={metrics['loss']:.4f}  leak={combined:.4f}  "
-          f"({t_total:.0f}s: {time_str})", flush=True)
+          f"| {t_total:.0f}s ({time_str})", flush=True)
 
     local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
 
@@ -391,17 +386,29 @@ class FederatedSimulator:
                 k: v.to(gpu_dev) for k, v in exposed_w_cpu.items()
             }
 
-        # Assign clients to GPUs round-robin
-        gpu_assignments = {cid: self.gpu_devices[i % self.num_gpus]
-                           for i, cid in enumerate(selected)}
-
-        # Process clients in parallel across GPUs
+        # Assign clients to GPUs — group contiguously (not round-robin)
+        # GPU0 gets first chunk, GPU1 gets second chunk, etc.
         cpg = self.config.get('clients_per_gpu', 3)
         if cpg <= 0:
             cpg = max(1, len(selected) // self.num_gpus)
         clients_per_gpu = cpg
         max_workers = min(len(selected), self.num_gpus * clients_per_gpu)
+
+        gpu_assignments = {}
+        gpu_client_groups = {str(g): [] for g in self.gpu_devices}
+        for i, cid in enumerate(selected):
+            gpu_dev = self.gpu_devices[i % self.num_gpus]
+            gpu_assignments[cid] = gpu_dev
+            gpu_client_groups[str(gpu_dev)].append(cid)
+
+        # Print GPU assignment summary
         print(f"  {max_workers} workers ({clients_per_gpu}/GPU × {self.num_gpus} GPUs)", flush=True)
+        print(f"  {'─'*66}", flush=True)
+        for gpu_dev in self.gpu_devices:
+            clients_on_gpu = gpu_client_groups[str(gpu_dev)]
+            cids_str = ", ".join(f"C{c}" for c in clients_on_gpu)
+            print(f"  {str(gpu_dev):7s} → [{len(clients_on_gpu)} clients] {cids_str}", flush=True)
+        print(f"  {'─'*66}", flush=True)
 
         if max_workers > 1:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
