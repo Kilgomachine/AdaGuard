@@ -37,7 +37,10 @@ T2: 0.7
 entropy_bins: 50
 
 # Empirical attack settings
-empirical_iterations: 300
+# NOTE: The attack code was designed for ~20 iterations ("lightweight").
+# 50 is a good balance between quality and speed.
+# 300 was causing 200s/client (way too slow).
+empirical_iterations: 50
 empirical_lr: 0.1
 
 # Full GI attack
@@ -45,7 +48,8 @@ gi_iters: 1000
 gi_lr: 0.1
 
 # Label metric
-mi_samples_per_class: 50
+# 20 samples/class = 200 forward passes total (was 50 = 500 passes, too slow)
+mi_samples_per_class: 20
 
 # Fisher / MaskCrypt
 fisher_topk: 50

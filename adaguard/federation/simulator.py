@@ -63,12 +63,13 @@ def _log_gpu_status():
 
 
 def _process_client(cid, client, global_state, batch_size, gpu_device, config,
-                    global_model_state, exposed_w, skip_glmip, skip_empirical,
+                    global_model_state, exposed_w_gpu, skip_glmip, skip_empirical,
                     train_dataset):
     """Process a single client on a specific GPU. Returns (cid, metrics, protected_gd) or None.
 
     This function is designed to run in a thread with its own GPU assignment.
     It creates its own metric instances to avoid cross-thread state issues.
+    exposed_w_gpu should already be on the target GPU (pre-copied once per GPU).
     """
     global _progress_count
     t_start = time.perf_counter()
@@ -79,7 +80,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         gpu_status = _log_gpu_status()
         done = _progress_count
         total = _progress_total
-    print(f"  [{done:3d}/{total}] >>> Client {cid:3d} STARTED on {gpu_device}   [{gpu_status}]", flush=True)
+    print(f"  [{done:3d}/{total}] >>> C{cid:<4d} on {gpu_device}   [{gpu_status}]", flush=True)
 
     # ── Phase 1: Local Training ──
     t_phase = time.perf_counter()
@@ -109,7 +110,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     local_weights = {k: v.to(gpu_device) for k, v in local_weights.items()}
     if original_images is not None:
         original_images = original_images.to(gpu_device)
-    exposed_w_gpu = {k: v.to(gpu_device) for k, v in exposed_w.items()}
+    # exposed_w_gpu is already on the correct GPU (pre-copied in run_round)
 
     # Create per-thread metric instances on this GPU
     entropy_metric = EntropyLeakScoreMetric(num_bins=config['entropy_bins'])
@@ -283,12 +284,14 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
             parts.append(f"{phase}={t:.0f}s")
     time_str = " ".join(parts)
 
-    print(f"  [{done:3d}/{total}] <<< Client {cid:3d} DONE    on {gpu_device}  "
+    gpu_short = str(gpu_device).replace('cuda:', 'GPU')
+    print(f"  [{done:3d}/{total}] <<< C{cid:<4d} on {gpu_device}  "
           f"loss={metrics['loss']:.4f}  leak={combined:.4f}  "
-          f"({t_total:.0f}s: {time_str})   [{gpu_status}]", flush=True)
+          f"({t_total:.0f}s: {time_str})", flush=True)
 
     local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
 
+    # Return exposed_w_gpu back (it's shared, not per-client)
     return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights, local_state_cpu
 
 
@@ -375,11 +378,18 @@ class FederatedSimulator:
         global_state = {k: v.cpu() for k, v in self.global_model.state_dict().items()}
         global_model_state = global_state  # for creating model copies on other GPUs
 
-        exposed_w = self.weights_previous_round or self.weights_before_round
+        exposed_w_cpu = self.weights_previous_round or self.weights_before_round
 
         client_results = []
         all_gradients = []
         all_state_dicts = []  # full state dicts for BN buffer averaging
+
+        # Pre-copy exposed_w to each GPU ONCE (not per-client)
+        exposed_w_per_gpu = {}
+        for gpu_dev in self.gpu_devices:
+            exposed_w_per_gpu[str(gpu_dev)] = {
+                k: v.to(gpu_dev) for k, v in exposed_w_cpu.items()
+            }
 
         # Assign clients to GPUs round-robin
         gpu_assignments = {cid: self.gpu_devices[i % self.num_gpus]
@@ -388,22 +398,21 @@ class FederatedSimulator:
         # Process clients in parallel across GPUs
         cpg = self.config.get('clients_per_gpu', 3)
         if cpg <= 0:
-            # Auto: estimate from available GPU memory
             cpg = max(1, len(selected) // self.num_gpus)
         clients_per_gpu = cpg
         max_workers = min(len(selected), self.num_gpus * clients_per_gpu)
-        print(f"  [Parallel] {max_workers} workers across {self.num_gpus} GPUs "
-              f"({clients_per_gpu} clients/GPU)", flush=True)
+        print(f"  {max_workers} workers ({clients_per_gpu}/GPU × {self.num_gpus} GPUs)", flush=True)
 
         if max_workers > 1:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {}
                 for cid in selected:
                     gpu_dev = gpu_assignments[cid]
+                    ew_gpu = exposed_w_per_gpu[str(gpu_dev)]
                     future = executor.submit(
                         _process_client, cid, self.clients[cid],
                         global_state, batch_size, gpu_dev, self.config,
-                        global_model_state, exposed_w,
+                        global_model_state, ew_gpu,
                         skip_glmip, skip_empirical, self.train_dataset,
                     )
                     futures[future] = cid
@@ -414,6 +423,8 @@ class FederatedSimulator:
                         result = future.result()
                     except Exception as e:
                         print(f"  [ERROR] Client {cid}: {e}", flush=True)
+                        import traceback
+                        traceback.print_exc()
                         continue
 
                     if result is None:
@@ -427,12 +438,13 @@ class FederatedSimulator:
                         local_state_cpu, all_state_dicts,
                     )
         else:
-            # Single GPU — run sequentially (same as before, avoids thread overhead)
+            # Single GPU — run sequentially
             for cid in selected:
                 gpu_dev = self.gpu_devices[0]
+                ew_gpu = exposed_w_per_gpu[str(gpu_dev)]
                 result = _process_client(
                     cid, self.clients[cid], global_state, batch_size,
-                    gpu_dev, self.config, global_model_state, exposed_w,
+                    gpu_dev, self.config, global_model_state, ew_gpu,
                     skip_glmip, skip_empirical, self.train_dataset,
                 )
                 if result is None:

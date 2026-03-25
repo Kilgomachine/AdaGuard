@@ -15,7 +15,7 @@ class GINASAttack:
     """Multi-restart gradient inversion attack."""
 
     def __init__(self, model, criterion, device, n_iter=20, lr=0.1,
-                 n_restarts=3, gl=1e-3, focus_layers=None):
+                 n_restarts=1, gl=1e-3, focus_layers=None):
         self.model = model
         self.criterion = criterion
         self.device = device

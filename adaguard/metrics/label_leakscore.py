@@ -54,30 +54,41 @@ class GLMIPMetric:
 
             sampled = random.sample(ids, min(samples_per_class, len(ids)))
 
-            # Batch forward+backward for speed
-            for idx in sampled:
-                img, lbl = dataset[idx]
-                model.zero_grad()
-                out = model(img.unsqueeze(0).to(device))
-                criterion(
-                    out,
-                    torch.tensor([lbl], dtype=torch.long, device=device),
-                ).backward()
+            # Batch processing: accumulate per-sample gradients efficiently
+            # Process in mini-batches of 16 for GPU efficiency
+            MINI_BS = 16
+            for batch_start in range(0, len(sampled), MINI_BS):
+                batch_ids = sampled[batch_start:batch_start + MINI_BS]
+                imgs = []
+                lbls = []
+                for idx in batch_ids:
+                    img, lbl = dataset[idx]
+                    imgs.append(img)
+                    lbls.append(lbl if isinstance(lbl, int) else int(lbl))
 
-                if focus_layers:
-                    parts = []
-                    for name, p in model.named_parameters():
-                        if p.grad is not None and name in focus_layers:
-                            parts.append(p.grad.clone().detach().flatten())
-                    flat = torch.cat(parts) if parts else torch.tensor([])
-                else:
-                    flat = torch.cat([
-                        p.grad.clone().detach().flatten()
-                        for p in model.parameters() if p.grad is not None
-                    ])
+                img_batch = torch.stack(imgs).to(device)
+                lbl_batch = torch.tensor(lbls, dtype=torch.long, device=device)
 
-                if flat.numel() > 0:
-                    class_grads[c].append(flat)
+                # Per-sample gradients via loop (need individual gradients, not batch mean)
+                for i in range(len(img_batch)):
+                    model.zero_grad()
+                    out = model(img_batch[i:i+1])
+                    criterion(out, lbl_batch[i:i+1]).backward()
+
+                    if focus_layers:
+                        parts = []
+                        for name, p in model.named_parameters():
+                            if p.grad is not None and name in focus_layers:
+                                parts.append(p.grad.clone().detach().flatten())
+                        flat = torch.cat(parts) if parts else torch.tensor([])
+                    else:
+                        flat = torch.cat([
+                            p.grad.clone().detach().flatten()
+                            for p in model.parameters() if p.grad is not None
+                        ])
+
+                    if flat.numel() > 0:
+                        class_grads[c].append(flat)
 
         class_means = {c: torch.stack(gs).mean(0) for c, gs in class_grads.items()}
         all_g = [g for gs in class_grads.values() for g in gs]
