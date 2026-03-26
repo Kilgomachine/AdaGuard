@@ -544,6 +544,13 @@ class FederatedSimulator:
                 self.global_model, avg_grads, self.config['fl_lr'],
             )
 
+        # Free large per-round data to prevent OOM over many rounds
+        del all_state_dicts, all_gradients, exposed_w_per_gpu
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         self.weights_after_round = {
             n: p.clone().detach()
             for n, p in self.global_model.named_parameters()
@@ -557,7 +564,9 @@ class FederatedSimulator:
         # --- Aggregate round metrics ---
         round_summary = self._summarize_round(rnd, client_results, accuracy)
         round_summary['test_loss'] = test_loss
-        self.round_history.append(round_summary)
+        # Store lightweight copy in history (client_details can be huge over 50 rounds)
+        history_copy = {k: v for k, v in round_summary.items() if k != 'client_details'}
+        self.round_history.append(history_copy)
 
         return round_summary
 
