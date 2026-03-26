@@ -58,8 +58,11 @@ echo "Seed: $SEED | Strategy: $STRATEGY | Clients: $NC | Per-round: $CPR | Round
 echo "Output: $OUTPUT"
 echo "Log: $LOGFILE"
 
+CKPT_DIR="${RESULTS_DIR}/checkpoints_${STRATEGY}_seed${SEED}_${NC}clients"
+
 # --defer-attacks: train fast, save client data, run attacks later via run_attacks.py
 # --log: persistent log file (survives SSH disconnects — just cat $LOGFILE)
+# --resume-dir: auto-checkpoint after each round; auto-resumes if job is restarted
 stdbuf -oL -eL python -u run_headless.py \
     --config hpc/config_1k.yaml \
     --strategy "$STRATEGY" \
@@ -69,6 +72,7 @@ stdbuf -oL -eL python -u run_headless.py \
     --num-rounds "$NR" \
     --pretrain-epochs 0 \
     --defer-attacks \
+    --resume-dir "$CKPT_DIR" \
     --log "$LOGFILE" \
     --output "$OUTPUT"
 
@@ -76,3 +80,6 @@ echo "Task $SLURM_ARRAY_TASK_ID ($STRATEGY, seed=$SEED, ${NC} clients) completed
 echo ""
 echo "To run attacks on saved data:"
 echo "  python run_attacks.py --data-dir ${RESULTS_DIR}/client_data_${STRATEGY}_seed${SEED}_${NC}clients --config hpc/config_1k.yaml --results $OUTPUT"
+echo ""
+echo "To reuse this training without retraining:"
+echo "  python run_headless.py --load-training ${RESULTS_DIR}/snapshot_${STRATEGY}_seed${SEED}_${NC}clients/training_snapshot.pt --config hpc/config_1k.yaml --output NEW_OUTPUT.json"

@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import random
 import time
 import sys
 import os
@@ -68,12 +69,84 @@ def make_serializable(obj):
     return obj
 
 
+def save_checkpoint(checkpoint_dir, rnd, sim, round_results, config, strategy,
+                    pretrain_history, total_start, client_data_map_seed_info=None):
+    """Save a checkpoint after each round so training can resume if interrupted."""
+    ckpt_path = Path(checkpoint_dir) / 'checkpoint.pt'
+    ckpt_tmp = Path(checkpoint_dir) / 'checkpoint.pt.tmp'
+    ckpt_data = {
+        'round': rnd,
+        'global_model_state': sim.global_model.state_dict(),
+        'weights_before_round': sim.weights_before_round,
+        'weights_after_round': sim.weights_after_round,
+        'weights_previous_round': sim.weights_previous_round,
+        'round_history': sim.round_history,
+        'round_results': round_results,
+        'config': config,
+        'strategy': strategy,
+        'pretrain_history': pretrain_history,
+        'elapsed_before_resume': time.time() - total_start,
+        'rng_state_torch': torch.random.get_rng_state(),
+        'rng_state_numpy': np.random.get_state(),
+        'rng_state_python': random.getstate(),
+    }
+    if torch.cuda.is_available():
+        ckpt_data['rng_state_cuda'] = [torch.cuda.get_rng_state(i)
+                                        for i in range(torch.cuda.device_count())]
+    # Atomic write: save to tmp then rename (avoids corrupt checkpoint on kill)
+    torch.save(ckpt_data, ckpt_tmp)
+    ckpt_tmp.rename(ckpt_path)
+
+
+def load_checkpoint(checkpoint_dir):
+    """Load checkpoint. Returns dict or None if no checkpoint exists."""
+    ckpt_path = Path(checkpoint_dir) / 'checkpoint.pt'
+    if not ckpt_path.exists():
+        return None
+    print(f"  Found checkpoint: {ckpt_path}")
+    return torch.load(ckpt_path, map_location='cpu', weights_only=False)
+
+
+def save_training_snapshot(snapshot_dir, sim, config, strategy, round_results,
+                           pretrain_history, client_data_map):
+    """Save everything needed to run analysis without retraining.
+
+    Saves: final model, per-round model snapshots, config, round results,
+    client data partition, and all round history for offline metrics/attacks.
+    """
+    snap_dir = Path(snapshot_dir)
+    snap_dir.mkdir(parents=True, exist_ok=True)
+
+    snapshot = {
+        'final_model_state': sim.global_model.state_dict(),
+        'config': config,
+        'strategy': strategy,
+        'round_results': round_results,
+        'round_history': sim.round_history,
+        'pretrain_history': pretrain_history,
+        'client_data_map': {k: v for k, v in client_data_map.items()},
+        'weights_before_last_round': sim.weights_before_round,
+        'weights_after_last_round': sim.weights_after_round,
+    }
+    snap_path = snap_dir / 'training_snapshot.pt'
+    torch.save(snapshot, snap_path)
+    print(f"  Training snapshot saved to: {snap_path}")
+    print(f"  To skip training next time, use: --load-training {snap_path}")
+    return snap_path
+
+
 def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_path,
                       pretrain_override=None, seed_override=None,
                       num_clients_override=None, clients_per_round_override=None,
                       num_rounds_override=None, client_lr_override=None,
-                      defer_attacks=False):
-    """Run FL rounds and save results."""
+                      defer_attacks=False, resume_dir=None, load_training=None):
+    """Run FL rounds and save results.
+
+    Args:
+        resume_dir: directory for checkpointing (auto-resumes if checkpoint exists)
+        load_training: path to training_snapshot.pt to skip training entirely
+    """
+    import random as _random
     from adaguard.config import load_config, set_seed, get_device
     from adaguard.models import create_model
     from adaguard.data.cifar10 import load_cifar10, partition_data_non_iid
@@ -121,10 +194,71 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         flags.append("skip Empirical")
     if defer_attacks:
         flags.append("DEFER ATTACKS (train only, run attacks later)")
+    if resume_dir:
+        flags.append(f"CHECKPOINT DIR: {resume_dir}")
+    if load_training:
+        flags.append(f"LOAD TRAINING: {load_training}")
     if flags:
         print(f"  Flags      {', '.join(flags)}")
     print(f"{'='*70}\n")
 
+    # ── Load training snapshot (skip all training) ──
+    if load_training:
+        print(f"\n=== Loading completed training from {load_training} ===")
+        snapshot = torch.load(load_training, map_location='cpu', weights_only=False)
+        config_snap = snapshot['config']
+        # Use snapshot's model, results, history — no training needed
+        model = create_model(config_snap.get('model', 'smallcnn'),
+                             num_classes=config_snap['num_classes']).to(device)
+        model.load_state_dict(snapshot['final_model_state'])
+        total_params = sum(p.numel() for p in model.parameters())
+        print(f"  Model loaded: {total_params:,} params")
+
+        round_results = snapshot['round_results']
+        pretrain_history = snapshot.get('pretrain_history', [])
+        pretrain_time = 0.0
+        total_time = 0.0
+
+        # Print final accuracy from loaded training
+        if round_results:
+            last = round_results[-1]
+            acc = last.get('accuracy', 0) * 100
+            test_loss = last.get('test_loss', 0)
+            print(f"  Loaded {len(round_results)} rounds — Final Acc: {acc:.1f}%, Loss: {test_loss:.4f}")
+
+        print(f"  Training skipped — using saved model and results")
+        print(f"  You can now run analysis/attacks on this data without retraining\n")
+
+        # Assemble output
+        output = {
+            'metadata': {
+                'timestamp': datetime.now().isoformat(),
+                'config_path': str(config_path),
+                'strategy': strategy,
+                'device': str(device),
+                'gpu': torch.cuda.get_device_name(0) if device.type == 'cuda' else None,
+                'total_params': total_params,
+                'seed': config['seed'],
+                'skip_glmip': skip_glmip,
+                'skip_empirical': skip_empirical,
+                'total_time_s': total_time,
+                'pretrain_time_s': pretrain_time,
+                'loaded_from': str(load_training),
+            },
+            'config': config_snap,
+            'pretrain_history': pretrain_history,
+            'rounds': make_serializable(round_results),
+        }
+
+        out_path = Path(output_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, 'w') as f:
+            json.dump(output, f, indent=2, default=str)
+
+        print(f"Results saved to: {out_path}")
+        return output
+
+    # ── Normal training path ──
     # Load data
     train_ds, test_ds = load_cifar10(data_root=os.environ.get('DATA_DIR', './data'))
 
@@ -152,6 +286,46 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     pretrain_time = time.time() - t0
     print(f"Pre-training took {pretrain_time:.1f}s")
 
+    # ── Check for checkpoint to resume from ──
+    start_round = 0
+    round_results = []
+    elapsed_before = 0.0
+
+    # Set up checkpoint directory
+    checkpoint_dir = resume_dir
+    if checkpoint_dir is None:
+        # Default: next to output file
+        checkpoint_dir = str(Path(output_path).parent / f'checkpoints_{Path(output_path).stem}')
+    Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
+
+    ckpt = load_checkpoint(checkpoint_dir)
+    if ckpt is not None:
+        start_round = ckpt['round'] + 1
+        round_results = ckpt['round_results']
+        elapsed_before = ckpt.get('elapsed_before_resume', 0.0)
+
+        # Restore model state
+        sim.global_model.load_state_dict(ckpt['global_model_state'])
+        sim.weights_before_round = ckpt.get('weights_before_round')
+        sim.weights_after_round = ckpt.get('weights_after_round')
+        sim.weights_previous_round = ckpt.get('weights_previous_round')
+        sim.round_history = ckpt.get('round_history', [])
+
+        # Restore RNG states for reproducibility
+        torch.random.set_rng_state(ckpt['rng_state_torch'])
+        np.random.set_state(ckpt['rng_state_numpy'])
+        _random.setstate(ckpt['rng_state_python'])
+        if torch.cuda.is_available() and 'rng_state_cuda' in ckpt:
+            for i, state in enumerate(ckpt['rng_state_cuda']):
+                torch.cuda.set_rng_state(state, i)
+
+        last_acc = round_results[-1].get('accuracy', 0) * 100 if round_results else 0
+        print(f"\n  RESUMED from round {start_round} (acc={last_acc:.1f}%, "
+              f"prev elapsed={elapsed_before/60:.1f}m)")
+        print(f"  Checkpoint: {checkpoint_dir}")
+    else:
+        print(f"  Checkpoint dir: {checkpoint_dir} (saving after each round)")
+
     # Run FL rounds
     # If deferring attacks, save client data next to output for later processing
     attack_save_dir = None
@@ -161,11 +335,15 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         skip_glmip = True
         skip_empirical = True
 
-    print(f"\n=== Federated Learning ({config['num_rounds']} rounds) ===")
-    round_results = []
+    remaining_rounds = config['num_rounds'] - start_round
+    if remaining_rounds <= 0:
+        print(f"\n=== Training already complete ({config['num_rounds']} rounds) ===")
+    else:
+        print(f"\n=== Federated Learning ({config['num_rounds']} rounds, starting from {start_round + 1}) ===")
+
     total_start = time.time()
 
-    for rnd in range(config['num_rounds']):
+    for rnd in range(start_round, config['num_rounds']):
         rnd_start = time.time()
         summary = sim.run_round(
             rnd,
@@ -199,18 +377,19 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         loss_val = summary.get('loss', 0)
 
         # Timing
-        elapsed = time.time() - total_start
-        avg_per_round = elapsed / (rnd + 1)
-        remaining = avg_per_round * (config['num_rounds'] - rnd - 1)
+        elapsed = time.time() - total_start + elapsed_before
+        rounds_done = rnd + 1
+        avg_per_round = elapsed / rounds_done
+        remaining = avg_per_round * (config['num_rounds'] - rounds_done)
 
         # ── Clean round summary ──
         n = config['num_rounds']
         bar_len = 20
-        bar_fill = int(bar_len * (rnd + 1) / n)
+        bar_fill = int(bar_len * rounds_done / n)
         bar = '#' * bar_fill + '-' * (bar_len - bar_fill)
 
         print(f"\n{'='*70}", flush=True)
-        print(f"  ROUND {rnd+1}/{n}  [{bar}]  {rnd_time:.0f}s  "
+        print(f"  ROUND {rounds_done}/{n}  [{bar}]  {rnd_time:.0f}s  "
               f"(elapsed {elapsed/60:.1f}m, ETA {remaining/60:.1f}m)", flush=True)
         print(f"{'='*70}", flush=True)
 
@@ -236,7 +415,16 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
 
         print(f"{'='*70}\n", flush=True)
 
-    total_time = time.time() - total_start
+        # ── Save checkpoint after each round ──
+        save_checkpoint(checkpoint_dir, rnd, sim, round_results, config, strategy,
+                        pretrain_history, total_start)
+
+    total_time = time.time() - total_start + elapsed_before
+
+    # ── Save training snapshot for future reuse ──
+    snapshot_dir = str(Path(output_path).parent / f'snapshot_{Path(output_path).stem}')
+    save_training_snapshot(snapshot_dir, sim, config, strategy, round_results,
+                           pretrain_history, client_data_map)
 
     # Assemble output
     output = {
@@ -382,6 +570,10 @@ def main():
                         help='Defer GLMIP/Empirical attacks — train fast, run attacks later via run_attacks.py')
     parser.add_argument('--log', type=str, default=None,
                         help='Path to persistent log file (survives SSH disconnects)')
+    parser.add_argument('--resume-dir', type=str, default=None,
+                        help='Checkpoint directory for resume-on-interrupt (auto-saves after each round)')
+    parser.add_argument('--load-training', type=str, default=None,
+                        help='Path to training_snapshot.pt — skip training, load saved model+results')
 
     args = parser.parse_args()
 
@@ -406,7 +598,9 @@ def main():
                           clients_per_round_override=args.clients_per_round,
                           num_rounds_override=args.num_rounds,
                           client_lr_override=args.client_lr,
-                          defer_attacks=args.defer_attacks)
+                          defer_attacks=args.defer_attacks,
+                          resume_dir=args.resume_dir,
+                          load_training=args.load_training)
 
 
 if __name__ == '__main__':
