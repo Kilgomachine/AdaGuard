@@ -1,8 +1,12 @@
 # AdaGuard 1000-Client Configuration
 # For multi-GPU / multi-node runs on Matilda
 #
-# CIFAR-10 has 50K training images. With 1000 clients, each gets ~50 samples
-# (non-IID: 2 classes, ~25 samples/class). This is realistic for cross-device FL.
+# CIFAR-10 has 50K training images. With 1000 clients and 3 classes each,
+# each gets ~48 samples (non-IID). No pretraining — matches MaskCrypt paper.
+#
+# MaskCrypt paper settings: 100 clients, 20/round (20%), IID, lr=0.1, 5 epochs
+# Our settings: 1000 clients, 100/round (10%), non-IID, lr=0.01, 10 steps
+# Non-IID with 1000 clients requires more rounds to converge.
 #
 # Override at runtime: python run_headless.py --config hpc/config_1k.yaml \
 #     --num-clients 2000 --clients-per-round 100
@@ -11,17 +15,17 @@
 model: resnet18
 num_classes: 10
 image_size: 32
-pretrain_epochs: 10         # centralized warmup → ~85-90% before FL starts
+pretrain_epochs: 0          # no pretraining — train from scratch (matches MaskCrypt paper)
 pretrain_lr: 0.1
 pretrain_batch_size: 128
 
 # Federated Learning — 1K clients
 num_clients: 1000
-clients_per_round: 100      # 10% participation = better averaging, less oscillation
-num_rounds: 100
-client_batch_size: 16       # smaller batch for ~50 samples/client
-client_local_steps: 5       # fewer steps to avoid drifting from pretrained model
-client_lr: 0.005            # low LR to preserve pretrained quality
+clients_per_round: 100      # 10% participation
+num_rounds: 250             # non-IID needs more rounds to converge
+client_batch_size: 16       # smaller batch for ~48 samples/client
+client_local_steps: 10      # ~5 epochs over 48 samples (matches MaskCrypt: 5 epochs)
+client_lr: 0.01             # 0.1 diverges with non-IID; 0.01 was stable and improving
 fl_lr: 1.0                  # server-side lr (1.0 = standard FedAvg)
 
 # LeakScore weights
@@ -70,7 +74,7 @@ noise_levels: [0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
 client_counts_experiment: [10, 50, 100, 500, 1000]
 
 # Data partition
-classes_per_client: 5       # non-IID but not extreme: each client sees 5 of 10 classes
+classes_per_client: 3       # non-IID: each client sees 3 of 10 classes
 min_samples_per_client: 30  # ensure at least 30 samples per client
 
 # Seed

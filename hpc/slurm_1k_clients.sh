@@ -44,8 +44,8 @@ STRATEGY="${STRATEGIES[$SLURM_ARRAY_TASK_ID]}"
 
 # Allow environment variable overrides for client count
 NC="${NUM_CLIENTS:-1000}"
-CPR="${CLIENTS_PER_ROUND:-50}"
-NR="${NUM_ROUNDS:-50}"
+CPR="${CLIENTS_PER_ROUND:-100}"
+NR="${NUM_ROUNDS:-250}"
 
 RESULTS_DIR="/scratch/projects/secure-distributed-ml/results/1k_experiment_${SLURM_ARRAY_JOB_ID}"
 LOGS_DIR="/scratch/projects/secure-distributed-ml/logs"
@@ -67,6 +67,7 @@ stdbuf -oL -eL python -u run_headless.py \
     --num-clients "$NC" \
     --clients-per-round "$CPR" \
     --num-rounds "$NR" \
+    --pretrain-epochs 0 \
     --defer-attacks \
     --log "$LOGFILE" \
     --output "$OUTPUT"
