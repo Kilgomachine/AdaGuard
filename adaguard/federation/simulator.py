@@ -152,23 +152,10 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['fisher_per_weight_median'] = fw.median().item()
         metrics['fisher_per_weight_p95'] = torch.quantile(fw.float(), 0.95).item()
 
-    # MaskCrypt
-    t0 = time.perf_counter()
-    maskcrypt_metric = MaskCryptMetric(enc_pct=config['encryption_top_percent'])
-    mc_r = maskcrypt_metric.compute(gd, exposed_w_gpu, local_weights)
-    timing['maskcrypt'] = time.perf_counter() - t0
-    metrics['maskcrypt_compute_time'] = timing['maskcrypt']
-    metrics.update(mc_r)
-
-    if mc_r.get('maskcrypt_per_weight_abs') is not None and mc_r['maskcrypt_per_weight_abs'].numel() > 0:
-        mw = mc_r['maskcrypt_per_weight_abs']
-        max_mw = max(mw.max().item(), 1e-12)
-        metrics['maskcrypt_hist'] = torch.histc(mw.float(), bins=100, min=0, max=max_mw).tolist()
-        metrics['maskcrypt_hist_max'] = max_mw
-        metrics['maskcrypt_per_weight_mean'] = mw.mean().item()
-        metrics['maskcrypt_per_weight_std'] = mw.std().item()
-        metrics['maskcrypt_per_weight_median'] = mw.median().item()
-        metrics['maskcrypt_per_weight_p95'] = torch.quantile(mw.float(), 0.95).item()
+    # MaskCrypt — only computed on-demand when encryption_strategy='maskcrypt'
+    # (not part of AdaGuard leakscore; used as baseline comparison only)
+    mc_r = {}
+    metrics['maskcrypt_compute_time'] = 0.0
 
     # Gradient Magnitude
     magnitude_metric = GradientMagnitudeMetric()
@@ -180,7 +167,6 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     metrics['total_params'] = total_params
     if total_params > 0:
         metrics['fisher_per_param_us'] = metrics['fisher_compute_time'] * 1e6 / total_params
-        metrics['maskcrypt_per_param_us'] = metrics['maskcrypt_compute_time'] * 1e6 / total_params
 
     # ── GLMIP + Empirical: run inline OR defer ──
     if save_dir is not None:
@@ -310,7 +296,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         total = _progress_total
 
     parts = [f"train={t_train:.0f}s"]
-    for phase in ['entropy', 'glmip', 'empirical', 'fisher', 'maskcrypt']:
+    for phase in ['entropy', 'glmip', 'empirical', 'fisher']:
         t = timing.get(phase, 0)
         if t > 0.1:
             parts.append(f"{phase}={t:.0f}s")
@@ -592,13 +578,12 @@ class FederatedSimulator:
             protected_gd = {n: torch.zeros_like(g) for n, g in gd_cpu.items()}
             metrics['actual_pct_encrypted'] = 1.0
         elif encryption_strategy == 'maskcrypt':
-            # Move to CPU for encryption
-            mc_r_cpu = {k: (v.cpu() if isinstance(v, torch.Tensor) else v)
-                        for k, v in mc_r.items()}
+            # Compute MaskCrypt on-demand (baseline comparison only, not part of leakscore)
             ew_cpu = {k: v.cpu() for k, v in exposed_w_gpu.items()}
             lw_cpu = {k: v.cpu() for k, v in local_weights.items()}
+            mc_result = self.maskcrypt_metric.compute(gd_cpu, ew_cpu, lw_cpu)
             protected_gd, enc_meta = self.maskcrypt_encryptor.encrypt(
-                gd_cpu, ew_cpu, lw_cpu, k=k, maskcrypt_result=mc_r_cpu,
+                gd_cpu, ew_cpu, lw_cpu, k=k, maskcrypt_result=mc_result,
             )
             metrics['actual_pct_encrypted'] = enc_meta['pct_encrypted']
         else:  # 'fisher'
