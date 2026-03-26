@@ -20,8 +20,8 @@ num_clients: 1000
 clients_per_round: 50       # 5% participation rate (standard for cross-device FL)
 num_rounds: 50
 client_batch_size: 16       # smaller batch for ~50 samples/client
-client_local_steps: 5       # fewer steps = less client drift on non-IID data
-client_lr: 0.1              # higher LR for short training (5 steps)
+client_local_steps: 10      # ~3 epochs on 48 samples (batch_size=16, 3 batches/epoch)
+client_lr: 0.01             # conservative LR to prevent client drift on non-IID data
 fl_lr: 1.0                  # server-side lr (1.0 = standard FedAvg)
 
 # LeakScore weights

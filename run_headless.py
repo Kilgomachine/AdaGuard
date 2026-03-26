@@ -215,7 +215,8 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         print(f"{'='*70}", flush=True)
 
         # Global model — the main thing
-        print(f"  GLOBAL MODEL   Accuracy: {acc:5.1f}%    Loss: {loss_val:.4f}", flush=True)
+        test_loss = summary.get('test_loss', 0)
+        print(f"  GLOBAL MODEL   Accuracy: {acc:5.1f}%    Test Loss: {test_loss:.4f}    Avg Client Loss: {loss_val:.4f}", flush=True)
 
         # LeakScore
         ent = summary.get('entropy_avg', 0)

@@ -550,11 +550,13 @@ class FederatedSimulator:
         }
 
         # --- Evaluate ---
-        accuracy = self._evaluate()
+        accuracy, test_loss = self._evaluate()
+        print(f"  Global model — Test Acc: {accuracy*100:.1f}%  Test Loss: {test_loss:.4f}", flush=True)
         sys.stdout.flush()
 
         # --- Aggregate round metrics ---
         round_summary = self._summarize_round(rnd, client_results, accuracy)
+        round_summary['test_loss'] = test_loss
         self.round_history.append(round_summary)
 
         return round_summary
@@ -604,20 +606,27 @@ class FederatedSimulator:
         client_results.append({'client_id': cid, 'metrics': metrics})
 
     def _evaluate(self):
-        """Evaluate global model on test set."""
+        """Evaluate global model on test set. Returns (accuracy, test_loss)."""
         self.global_model.eval()
         correct, total = 0, 0
+        total_loss = 0.0
+        n_batches = 0
         loader = DataLoader(self.test_dataset, batch_size=128, shuffle=False)
 
         with torch.no_grad():
             for imgs, lbls in loader:
                 imgs, lbls = imgs.to(self.device), lbls.to(self.device)
-                preds = self.global_model(imgs).argmax(1)
+                out = self.global_model(imgs)
+                total_loss += self.criterion(out, lbls).item()
+                n_batches += 1
+                preds = out.argmax(1)
                 correct += preds.eq(lbls).sum().item()
                 total += lbls.size(0)
 
         self.global_model.train()
-        return correct / max(total, 1)
+        acc = correct / max(total, 1)
+        test_loss = total_loss / max(n_batches, 1)
+        return acc, test_loss
 
     def _summarize_round(self, rnd, client_results, accuracy):
         """Average metrics across clients for round summary."""
