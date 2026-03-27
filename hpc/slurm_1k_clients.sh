@@ -59,6 +59,7 @@ echo "Output: $OUTPUT"
 echo "Log: $LOGFILE"
 
 CKPT_DIR="${RESULTS_DIR}/checkpoints_${STRATEGY}_seed${SEED}_${NC}clients"
+TB_DIR="/scratch/projects/secure-distributed-ml/results/tb_logs"
 
 # --defer-attacks: train fast, save client data, run attacks later via run_attacks.py
 # --log: persistent log file (survives SSH disconnects — just cat $LOGFILE)
@@ -73,6 +74,7 @@ stdbuf -oL -eL python -u run_headless.py \
     --pretrain-epochs 0 \
     --defer-attacks \
     --resume-dir "$CKPT_DIR" \
+    --tb-dir "$TB_DIR" \
     --log "$LOGFILE" \
     --output "$OUTPUT"
 

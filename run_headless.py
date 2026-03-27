@@ -50,6 +50,118 @@ import numpy as np
 import torch
 
 
+# ─── Tensorboard helper ───────────────────────────────────────────────
+class TBLogger:
+    """Tensorboard logger for FL training. Handles live logging + snapshot replay."""
+
+    def __init__(self, log_dir, config, strategy, run_name=None):
+        from torch.utils.tensorboard import SummaryWriter
+
+        if run_name is None:
+            seed = config.get('seed', 0)
+            nc = config.get('num_clients', 0)
+            run_name = f"{strategy}_seed{seed}_{nc}clients"
+
+        self.run_dir = Path(log_dir) / run_name
+        self.writer = SummaryWriter(log_dir=str(self.run_dir))
+
+        # Log config as text
+        cfg_lines = [f"**{k}**: {v}" for k, v in sorted(config.items())
+                     if not isinstance(v, (list, dict))]
+        self.writer.add_text('config/settings', '  \n'.join(cfg_lines), 0)
+        self.writer.add_text('config/strategy', strategy, 0)
+        self.writer.add_text('config/run_name', run_name, 0)
+
+    def log_round(self, rnd, summary, round_time=None):
+        """Log all metrics for a single round."""
+        w = self.writer
+        step = rnd + 1  # 1-indexed for display
+
+        # Global model
+        acc = summary.get('accuracy', 0)
+        test_loss = summary.get('test_loss', 0)
+        client_loss = summary.get('loss', 0)
+        w.add_scalar('Global/Accuracy_%', acc * 100, step)
+        w.add_scalar('Global/Test_Loss', test_loss, step)
+        w.add_scalar('Global/Avg_Client_Loss', client_loss, step)
+
+        # LeakScore
+        leak = summary.get('combined_leakscore', 0)
+        ent = summary.get('entropy_avg', 0)
+        lab = summary.get('label_avg', 0)
+        emp = summary.get('empirical_avg', 0)
+        w.add_scalar('LeakScore/Combined', leak, step)
+        w.add_scalar('LeakScore/Entropy', ent, step)
+        w.add_scalar('LeakScore/Label', lab, step)
+        w.add_scalar('LeakScore/Empirical', emp, step)
+
+        # Privacy metrics
+        fc = summary.get('fisher_concentration', 0)
+        mv = summary.get('maskcrypt_vulnerability', 0)
+        mg = summary.get('magnitude_score', 0)
+        w.add_scalar('Privacy/Fisher_Concentration', fc, step)
+        w.add_scalar('Privacy/MaskCrypt_Vulnerability', mv, step)
+        w.add_scalar('Privacy/Magnitude_Score', mg, step)
+
+        # Encryption
+        enc = summary.get('actual_pct_encrypted', 0)
+        w.add_scalar('Encryption/Pct_Encrypted', enc * 100, step)
+
+        # Timing
+        if round_time is not None:
+            w.add_scalar('Timing/Round_Seconds', round_time, step)
+
+        # Per-client loss distribution (histogram)
+        per_client = summary.get('per_client', [])
+        if per_client:
+            losses = [c.get('loss', 0) for c in per_client if c.get('loss') is not None]
+            if losses:
+                w.add_histogram('Clients/Loss_Distribution', np.array(losses), step)
+            leaks = [c.get('leakscore', 0) for c in per_client if c.get('leakscore') is not None]
+            if leaks:
+                w.add_histogram('Clients/LeakScore_Distribution', np.array(leaks), step)
+
+        w.flush()
+
+    def log_checkpoint_status(self, rnd, total_rounds, elapsed_s, status='running'):
+        """Log training progress status."""
+        pct = (rnd + 1) / total_rounds * 100 if total_rounds > 0 else 0
+        self.writer.add_text('status/progress',
+                             f"Round **{rnd+1}/{total_rounds}** ({pct:.0f}%) | "
+                             f"Elapsed: **{elapsed_s/60:.1f}m** | Status: **{status}**",
+                             rnd + 1)
+        self.writer.flush()
+
+    def log_resume(self, resumed_round, total_rounds):
+        """Log that training was resumed from a checkpoint."""
+        self.writer.add_text('status/events',
+                             f"**RESUMED** from round {resumed_round}/{total_rounds}",
+                             resumed_round)
+        self.writer.flush()
+
+    def log_completed(self, total_rounds, total_time, final_acc):
+        """Log training completion."""
+        self.writer.add_text('status/events',
+                             f"**COMPLETED** {total_rounds} rounds in "
+                             f"{total_time/60:.1f}m — Final Acc: {final_acc:.1f}%",
+                             total_rounds)
+        self.writer.flush()
+
+    def replay_from_results(self, round_results):
+        """Replay all round results into tensorboard (for snapshots/past runs)."""
+        for i, r in enumerate(round_results):
+            rnd_time = r.get('round_time_s', None)
+            self.log_round(i, r, round_time=rnd_time)
+        if round_results:
+            last = round_results[-1]
+            acc = last.get('accuracy', 0) * 100
+            self.log_completed(len(round_results), 0, acc)
+        print(f"  Replayed {len(round_results)} rounds to Tensorboard: {self.run_dir}")
+
+    def close(self):
+        self.writer.close()
+
+
 def make_serializable(obj):
     """Convert numpy/torch types to JSON-serializable Python types."""
     if isinstance(obj, dict):
@@ -139,12 +251,14 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
                       pretrain_override=None, seed_override=None,
                       num_clients_override=None, clients_per_round_override=None,
                       num_rounds_override=None, client_lr_override=None,
-                      defer_attacks=False, resume_dir=None, load_training=None):
+                      defer_attacks=False, resume_dir=None, load_training=None,
+                      tb_dir=None):
     """Run FL rounds and save results.
 
     Args:
         resume_dir: directory for checkpointing (auto-resumes if checkpoint exists)
         load_training: path to training_snapshot.pt to skip training entirely
+        tb_dir: tensorboard log directory (None = no tensorboard)
     """
     import random as _random
     from adaguard.config import load_config, set_seed, get_device
@@ -226,6 +340,13 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
             test_loss = last.get('test_loss', 0)
             print(f"  Loaded {len(round_results)} rounds — Final Acc: {acc:.1f}%, Loss: {test_loss:.4f}")
 
+        # Replay into Tensorboard so past training is visible
+        if tb_dir:
+            tb = TBLogger(tb_dir, config_snap, snapshot.get('strategy', strategy),
+                          run_name=f"snapshot_{strategy}_seed{config['seed']}")
+            tb.replay_from_results(round_results)
+            tb.close()
+
         print(f"  Training skipped — using saved model and results")
         print(f"  You can now run analysis/attacks on this data without retraining\n")
 
@@ -298,6 +419,12 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         checkpoint_dir = str(Path(output_path).parent / f'checkpoints_{Path(output_path).stem}')
     Path(checkpoint_dir).mkdir(parents=True, exist_ok=True)
 
+    # ── Initialize Tensorboard ──
+    tb = None
+    if tb_dir:
+        tb = TBLogger(tb_dir, config, strategy)
+        print(f"  Tensorboard: {tb.run_dir}")
+
     ckpt = load_checkpoint(checkpoint_dir)
     if ckpt is not None:
         start_round = ckpt['round'] + 1
@@ -323,6 +450,11 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         print(f"\n  RESUMED from round {start_round} (acc={last_acc:.1f}%, "
               f"prev elapsed={elapsed_before/60:.1f}m)")
         print(f"  Checkpoint: {checkpoint_dir}")
+
+        # Replay past rounds into Tensorboard so the full history is visible
+        if tb:
+            tb.replay_from_results(round_results)
+            tb.log_resume(start_round, config['num_rounds'])
     else:
         print(f"  Checkpoint dir: {checkpoint_dir} (saving after each round)")
 
@@ -419,7 +551,18 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         save_checkpoint(checkpoint_dir, rnd, sim, round_results, config, strategy,
                         pretrain_history, total_start)
 
+        # ── Log to Tensorboard ──
+        if tb:
+            tb.log_round(rnd, summary_clean, round_time=rnd_time)
+            tb.log_checkpoint_status(rnd, config['num_rounds'], elapsed)
+
     total_time = time.time() - total_start + elapsed_before
+
+    # ── Log training completion to Tensorboard ──
+    if tb:
+        final_acc = round_results[-1].get('accuracy', 0) * 100 if round_results else 0
+        tb.log_completed(config['num_rounds'], total_time, final_acc)
+        tb.close()
 
     # ── Save training snapshot for future reuse ──
     snapshot_dir = str(Path(output_path).parent / f'snapshot_{Path(output_path).stem}')
@@ -574,6 +717,8 @@ def main():
                         help='Checkpoint directory for resume-on-interrupt (auto-saves after each round)')
     parser.add_argument('--load-training', type=str, default=None,
                         help='Path to training_snapshot.pt — skip training, load saved model+results')
+    parser.add_argument('--tb-dir', type=str, default=None,
+                        help='Tensorboard log directory (view with: tensorboard --logdir TB_DIR)')
 
     args = parser.parse_args()
 
@@ -600,7 +745,8 @@ def main():
                           client_lr_override=args.client_lr,
                           defer_attacks=args.defer_attacks,
                           resume_dir=args.resume_dir,
-                          load_training=args.load_training)
+                          load_training=args.load_training,
+                          tb_dir=args.tb_dir)
 
 
 if __name__ == '__main__':
