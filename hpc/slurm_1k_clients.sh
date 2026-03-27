@@ -47,16 +47,19 @@ NC="${NUM_CLIENTS:-1000}"
 CPR="${CLIENTS_PER_ROUND:-100}"
 NR="${NUM_ROUNDS:-250}"
 
-RESULTS_DIR="/scratch/projects/secure-distributed-ml/results/1k_experiment_${SLURM_ARRAY_JOB_ID}"
+# Stable directories — do NOT use $SLURM_ARRAY_JOB_ID here, so checkpoints
+# persist across resubmissions and training can resume after job restarts.
+RESULTS_DIR="/scratch/projects/secure-distributed-ml/results/1k_experiment"
 LOGS_DIR="/scratch/projects/secure-distributed-ml/logs"
 mkdir -p "$RESULTS_DIR" "$LOGS_DIR"
 
 OUTPUT="${RESULTS_DIR}/${STRATEGY}_seed${SEED}_${NC}clients.json"
-LOGFILE="${LOGS_DIR}/adaguard_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.log"
+LOGFILE="${LOGS_DIR}/adaguard_${STRATEGY}_seed${SEED}.log"
 
 echo "Seed: $SEED | Strategy: $STRATEGY | Clients: $NC | Per-round: $CPR | Rounds: $NR"
 echo "Output: $OUTPUT"
 echo "Log: $LOGFILE"
+echo "Job ID: $SLURM_ARRAY_JOB_ID, Task: $SLURM_ARRAY_TASK_ID"
 
 CKPT_DIR="${RESULTS_DIR}/checkpoints_${STRATEGY}_seed${SEED}_${NC}clients"
 TB_DIR="/scratch/projects/secure-distributed-ml/results/tb_logs"
