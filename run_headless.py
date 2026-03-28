@@ -85,15 +85,25 @@ class TBLogger:
         w.add_scalar('Global/Test_Loss', test_loss, step)
         w.add_scalar('Global/Avg_Client_Loss', client_loss, step)
 
-        # LeakScore
+        # LeakScore — combined + averages
         leak = summary.get('combined_leakscore', 0)
         ent = summary.get('entropy_avg', 0)
         lab = summary.get('label_avg', 0)
         emp = summary.get('empirical_avg', 0)
         w.add_scalar('LeakScore/Combined', leak, step)
-        w.add_scalar('LeakScore/Entropy', ent, step)
-        w.add_scalar('LeakScore/Label', lab, step)
-        w.add_scalar('LeakScore/Empirical', emp, step)
+        w.add_scalar('LeakScore/Entropy_Avg', ent, step)
+        w.add_scalar('LeakScore/Label_Avg', lab, step)
+        w.add_scalar('LeakScore/Empirical_Avg', emp, step)
+
+        # Individual label metrics (3 components)
+        w.add_scalar('LeakScore_Label/GLMIP', summary.get('glmip_score', 0), step)
+        w.add_scalar('LeakScore_Label/ConfidenceGap', summary.get('confidence_gap', 0), step)
+        w.add_scalar('LeakScore_Label/CosineSimilarity', summary.get('cosine_leak_score', 0), step)
+
+        # Individual entropy metrics (3 components)
+        w.add_scalar('LeakScore_Entropy/Shannon', summary.get('shannon_leak_score', 0), step)
+        w.add_scalar('LeakScore_Entropy/Renyi', summary.get('renyi_leak_score', 0), step)
+        w.add_scalar('LeakScore_Entropy/MinEntropy', summary.get('min_entropy_leak_score', 0), step)
 
         # Privacy metrics
         fc = summary.get('fisher_concentration', 0)
@@ -252,13 +262,14 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
                       num_clients_override=None, clients_per_round_override=None,
                       num_rounds_override=None, client_lr_override=None,
                       defer_attacks=False, resume_dir=None, load_training=None,
-                      tb_dir=None):
+                      tb_dir=None, artifacts_dir=None):
     """Run FL rounds and save results.
 
     Args:
         resume_dir: directory for checkpointing (auto-resumes if checkpoint exists)
         load_training: path to training_snapshot.pt to skip training entirely
         tb_dir: tensorboard log directory (None = no tensorboard)
+        artifacts_dir: save per-client artifacts for Phase 2 scenario replay
     """
     import random as _random
     from adaguard.config import load_config, set_seed, get_device
@@ -312,6 +323,8 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         flags.append(f"CHECKPOINT DIR: {resume_dir}")
     if load_training:
         flags.append(f"LOAD TRAINING: {load_training}")
+    if artifacts_dir:
+        flags.append(f"ARTIFACTS: {artifacts_dir}")
     if flags:
         print(f"  Flags      {', '.join(flags)}")
     print(f"{'='*70}\n")
@@ -458,6 +471,23 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     else:
         print(f"  Checkpoint dir: {checkpoint_dir} (saving after each round)")
 
+    # ── Save artifact metadata for Phase 2 ──
+    if artifacts_dir:
+        Path(artifacts_dir).mkdir(parents=True, exist_ok=True)
+        metadata = {
+            'config': config,
+            'strategy': strategy,
+            'seed': config['seed'],
+            'num_clients': config['num_clients'],
+            'num_rounds': config['num_rounds'],
+            'model': config.get('model', 'smallcnn'),
+            'num_classes': config['num_classes'],
+        }
+        import json as _json
+        with open(Path(artifacts_dir) / 'metadata.json', 'w') as f:
+            _json.dump(metadata, f, indent=2, default=str)
+        print(f"  Artifacts dir: {artifacts_dir}")
+
     # Run FL rounds
     # If deferring attacks, save client data next to output for later processing
     attack_save_dir = None
@@ -483,6 +513,7 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
             skip_glmip=skip_glmip,
             skip_empirical=skip_empirical,
             save_dir=attack_save_dir,
+            artifacts_dir=artifacts_dir,
         )
         rnd_time = time.time() - rnd_start
 
@@ -719,6 +750,8 @@ def main():
                         help='Path to training_snapshot.pt — skip training, load saved model+results')
     parser.add_argument('--tb-dir', type=str, default=None,
                         help='Tensorboard log directory (view with: tensorboard --logdir TB_DIR)')
+    parser.add_argument('--artifacts-dir', type=str, default=None,
+                        help='Save per-client artifacts for Phase 2 scenario replay (~1TB for 250 rounds)')
 
     args = parser.parse_args()
 
@@ -746,7 +779,8 @@ def main():
                           defer_attacks=args.defer_attacks,
                           resume_dir=args.resume_dir,
                           load_training=args.load_training,
-                          tb_dir=args.tb_dir)
+                          tb_dir=args.tb_dir,
+                          artifacts_dir=args.artifacts_dir)
 
 
 if __name__ == '__main__':

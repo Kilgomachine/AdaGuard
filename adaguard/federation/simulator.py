@@ -75,11 +75,13 @@ def _release_worker(gpu_device, wid):
 
 def _process_client(cid, client, global_state, batch_size, gpu_device, config,
                     global_model_state, exposed_w_gpu, skip_glmip, skip_empirical,
-                    train_dataset, save_dir=None):
-    """Process a single client: train + fast metrics. Attacks are deferred.
+                    train_dataset, save_dir=None, artifacts_dir=None):
+    """Process a single client: train + fast metrics. Attacks are deferred to Phase 2.
 
-    Fast metrics (run inline): Entropy, Fisher, MaskCrypt, Magnitude, ConfGap, Cosine
-    Slow attacks (deferred): GLMIP, Empirical — client data saved to save_dir for later.
+    Fast metrics (run inline): Entropy, Fisher, Magnitude, ConfGap, Cosine, GLMIP
+    Slow attacks (Phase 2): Empirical GI attacks — run offline via run_scenario.py.
+
+    If artifacts_dir is set, saves comprehensive per-client data for Phase 2 replay.
     """
     global _progress_count
     t_start = time.perf_counter()
@@ -261,7 +263,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
     # Combined LeakScore
     combined_metric = CombinedLeakScore(
-        alpha=config['alpha'], beta=config['beta'], gamma=config['gamma'],
+        label_weight=config.get('label_weight', config.get('beta', 1.0)),
+        entropy_weight=config.get('entropy_weight', config.get('alpha', 1.0)),
+        empirical_weight=config.get('empirical_weight', config.get('gamma', 0.0)),
     )
     entropy_avg = np.mean([
         metrics['shannon_leak_score'],
@@ -310,6 +314,29 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     _release_worker(gpu_device, wid)
 
     local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
+
+    # ── Save comprehensive artifact for Phase 2 scenario replay ──
+    if artifacts_dir is not None:
+        artifact = {
+            'client_id': cid,
+            'gradient_dict': {k: v.cpu() for k, v in gd.items()},
+            'weight_delta': weight_delta_cpu,
+            'local_state_dict': local_state_cpu,
+            'local_weights': {k: v.cpu() for k, v in local_weights.items()},
+            'flat_gradient': flat.cpu(),
+            'outputs': outputs.cpu(),
+            'fisher_result': {k: (v.cpu() if isinstance(v, torch.Tensor) else v)
+                              for k, v in fisher_r.items()},
+            'metrics': metrics.copy(),
+        }
+        if original_images is not None:
+            artifact['images'] = original_images.cpu()
+        # Save labels from the client's last batch
+        artifact['labels'] = result.get('labels', torch.tensor([])).cpu()
+
+        import os
+        os.makedirs(artifacts_dir, exist_ok=True)
+        torch.save(artifact, os.path.join(artifacts_dir, f'client_{cid}.pt'))
 
     return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights, local_state_cpu
 
@@ -360,7 +387,7 @@ class FederatedSimulator:
 
     def run_round(self, rnd, encryption_strategy='fisher', num_clients=None,
                   batch_size=None, skip_glmip=False, skip_empirical=False,
-                  save_dir=None):
+                  save_dir=None, artifacts_dir=None):
         """Run one FL round with full AdaGuard pipeline.
 
         If save_dir is set, GLMIP and Empirical attacks are deferred —
@@ -452,13 +479,29 @@ class FederatedSimulator:
             print(f"          │ Clients: {c_str}", flush=True)
         print(f"  {'─'*66}", flush=True)
 
-        # Per-round save directory for deferred attacks
+        # Per-round save directory for deferred attacks (legacy)
         round_save_dir = None
         if save_dir is not None:
             round_save_dir = os.path.join(save_dir, f'round_{rnd}')
             os.makedirs(round_save_dir, exist_ok=True)
-            # Also save the global model state for later attack use
             torch.save(global_model_state, os.path.join(round_save_dir, 'global_model.pt'))
+
+        # Per-round artifacts directory for Phase 2 scenario replay
+        round_artifacts_dir = None
+        if artifacts_dir is not None:
+            save_every = self.config.get('save_every_n_rounds', 1)
+            total_rounds = self.config.get('num_rounds', 250)
+            # Save this round if: every N rounds, or last 5 rounds
+            should_save = (rnd % save_every == 0) or (rnd >= total_rounds - 5)
+            if should_save:
+                round_artifacts_dir = os.path.join(artifacts_dir, f'round_{rnd}')
+                os.makedirs(round_artifacts_dir, exist_ok=True)
+                # Save global model state before this round
+                torch.save(global_model_state, os.path.join(round_artifacts_dir, 'global_model.pt'))
+                # Save selected client IDs
+                import json
+                with open(os.path.join(round_artifacts_dir, 'selected_clients.json'), 'w') as f:
+                    json.dump(selected, f)
 
         if max_workers > 1:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -471,7 +514,7 @@ class FederatedSimulator:
                         global_state, batch_size, gpu_dev, self.config,
                         global_model_state, ew_gpu,
                         skip_glmip, skip_empirical, self.train_dataset,
-                        round_save_dir,
+                        round_save_dir, round_artifacts_dir,
                     )
                     futures[future] = cid
 
@@ -504,7 +547,7 @@ class FederatedSimulator:
                     cid, self.clients[cid], global_state, batch_size,
                     gpu_dev, self.config, global_model_state, ew_gpu,
                     skip_glmip, skip_empirical, self.train_dataset,
-                    round_save_dir,
+                    round_save_dir, round_artifacts_dir,
                 )
                 if result is None:
                     continue

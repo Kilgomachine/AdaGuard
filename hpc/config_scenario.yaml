@@ -1,0 +1,21 @@
+# AdaGuard Phase 2: Paper-Matched Attack Hyperparameters
+# Used by run_scenario.py for full gradient inversion attacks
+
+# GradInversion (Yin et al. 2021) — "See through Gradients"
+attack_gi_iters: 20000
+attack_gi_lr: 0.1
+attack_gi_tv_lambda: 1.0e-4
+attack_gi_l2_lambda: 1.0e-6
+attack_gi_bn_lambda: 0.1
+
+# GI-NAS (Yu et al. 2025) — "Boosting GI via Adaptive NAS"
+attack_ginas_iters: 500
+attack_ginas_lr: 1.0e-3
+attack_ginas_restarts: 8
+
+# GGCDM (Meng et al. 2025) — "Enhanced Privacy Leakage via Gradient-Guided CDM"
+attack_ggcdm_diffusion_steps: 1000
+attack_ggcdm_guidance_rate: 0.20
+
+# How many clients to attack per round (attacks are expensive)
+max_attack_clients: 5

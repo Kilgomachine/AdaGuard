@@ -26,10 +26,17 @@ DEFAULT_CONFIG = {
     'client_lr': 0.01,   # local SGD learning rate
     'fl_lr': 1.0,        # server-side lr (1.0 = standard FedAvg)
 
-    # LeakScore weights (alpha, beta, gamma)
+    # LeakScore weights
+    # label_weight: GLMIP + ConfidenceGap + CosineSimilarity
+    # entropy_weight: Shannon + Renyi + MinEntropy
+    # empirical_weight: lightweight GI attacks (Phase 2 only, 0 during training)
+    'label_weight': 1.0,
+    'entropy_weight': 1.0,
+    'empirical_weight': 0.0,  # 0 during training; Phase 2 scenarios override this
+    # Backward compat aliases (used by app.py)
     'alpha': 1.0,
     'beta': 1.0,
-    'gamma': 1.0,
+    'gamma': 0.0,
 
     # Encryption thresholds
     'T1': 0.3,
@@ -38,13 +45,29 @@ DEFAULT_CONFIG = {
     # Entropy metric
     'entropy_bins': 50,
 
-    # Empirical attack settings
+    # Empirical attack settings (lightweight, for leakscore)
     'empirical_iterations': 20,
     'empirical_lr': 0.1,
 
-    # Full GI attack (validation)
+    # Full paper-matched attack settings (Phase 2)
+    'attack_gi_iters': 20000,       # GradInversion (Yin et al. 2021)
+    'attack_gi_lr': 0.1,
+    'attack_gi_tv_lambda': 1e-4,
+    'attack_gi_l2_lambda': 1e-6,
+    'attack_gi_bn_lambda': 0.1,
+    'attack_ginas_candidates': 5000, # GI-NAS (Yu et al. 2025)
+    'attack_ginas_lr': 1e-3,
+    'attack_ggcdm_guidance_rate': 0.20, # GGCDM (Meng et al. 2025)
+    'attack_ggcdm_diffusion_steps': 1000,
+
+    # Full GI attack (validation/legacy)
     'gi_iters': 300,
     'gi_lr': 0.1,
+
+    # Artifact saving (Phase 1 → Phase 2 bridge)
+    'save_artifacts': True,       # save per-client artifacts for Phase 2
+    'save_every_n_rounds': 1,     # save artifacts every N rounds (1 = all)
+    'save_attack_clients': 100,   # how many clients per round to save (100 = all)
 
     # Label metric
     'mi_samples_per_class': 20,

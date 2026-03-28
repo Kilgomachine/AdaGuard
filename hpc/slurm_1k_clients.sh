@@ -63,10 +63,12 @@ echo "Job ID: $SLURM_ARRAY_JOB_ID, Task: $SLURM_ARRAY_TASK_ID"
 
 CKPT_DIR="${RESULTS_DIR}/checkpoints_${STRATEGY}_seed${SEED}_${NC}clients"
 TB_DIR="/scratch/projects/secure-distributed-ml/results/tb_logs"
+ARTIFACTS_DIR="${RESULTS_DIR}/artifacts_${STRATEGY}_seed${SEED}_${NC}clients"
 
-# --defer-attacks: train fast, save client data, run attacks later via run_attacks.py
+# --defer-attacks: train fast, save client data, run attacks later via run_scenario.py
 # --log: persistent log file (survives SSH disconnects — just cat $LOGFILE)
 # --resume-dir: auto-checkpoint after each round; auto-resumes if job is restarted
+# --artifacts-dir: save per-client artifacts for Phase 2 scenario evaluation
 stdbuf -oL -eL python -u run_headless.py \
     --config hpc/config_1k.yaml \
     --strategy "$STRATEGY" \
@@ -78,13 +80,15 @@ stdbuf -oL -eL python -u run_headless.py \
     --defer-attacks \
     --resume-dir "$CKPT_DIR" \
     --tb-dir "$TB_DIR" \
+    --artifacts-dir "$ARTIFACTS_DIR" \
     --log "$LOGFILE" \
     --output "$OUTPUT"
 
 echo "Task $SLURM_ARRAY_TASK_ID ($STRATEGY, seed=$SEED, ${NC} clients) completed at $(date)"
 echo ""
-echo "To run attacks on saved data:"
-echo "  python run_attacks.py --data-dir ${RESULTS_DIR}/client_data_${STRATEGY}_seed${SEED}_${NC}clients --config hpc/config_1k.yaml --results $OUTPUT"
+echo "To run Phase 2 scenarios on saved artifacts:"
+echo "  python run_scenario.py --artifacts-dir $ARTIFACTS_DIR --scenario adaguard_high --config hpc/config_scenario.yaml --output results.json"
+echo "  sbatch hpc/slurm_scenarios.sh   # Run all 11 scenarios"
 echo ""
 echo "To reuse this training without retraining:"
 echo "  python run_headless.py --load-training ${RESULTS_DIR}/snapshot_${STRATEGY}_seed${SEED}_${NC}clients/training_snapshot.pt --config hpc/config_1k.yaml --output NEW_OUTPUT.json"
