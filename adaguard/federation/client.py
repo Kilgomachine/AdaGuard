@@ -140,4 +140,84 @@ class FLClient:
             'local_weights': local_weights,         # param-only local weights
             'local_state_dict': local_state_dict,   # full state including BN
             'images': last_images,
+            '_local_model_state': local_model.state_dict(),  # for gradient accumulation
+        }
+
+    def compute_accumulated_gradient(self, model_state, K, batch_size=None):
+        """Compute accumulated gradient over K forward-backward passes (Eq. 15).
+
+        g_accumulated = (1/K) Σ_{k=1}^{K} (1/B Σ_{i=1}^{B} ∇L(f(x_{k,i}), y_{k,i}))
+
+        This produces B_eff = K * B, making gradient inversion exponentially
+        harder due to feature collision from the averaging.
+
+        Args:
+            model_state: model state dict to compute gradients against
+            K: number of forward-backward passes to accumulate
+            batch_size: batch size per pass (default: client_batch_size)
+
+        Returns:
+            dict with accumulated gradient_dict and flat_gradient
+        """
+        bs = batch_size or self.config['client_batch_size']
+
+        model = create_model(
+            self.config.get('model', 'smallcnn'),
+            num_classes=self.config['num_classes'],
+        ).to(self.device)
+        model.load_state_dict(model_state)
+        model.eval()  # BN in eval mode for consistent gradients
+
+        loader = DataLoader(
+            Subset(self.dataset, self.data_indices),
+            batch_size=bs, shuffle=True,
+        )
+
+        accum_grads = None
+        passes_done = 0
+
+        for k_pass in range(K):
+            for imgs, lbls in loader:
+                if passes_done >= K:
+                    break
+                imgs, lbls = imgs.to(self.device), lbls.to(self.device)
+
+                model.zero_grad()
+                outputs = model(imgs)
+                loss = self.criterion(outputs, lbls)
+                loss.backward()
+
+                batch_grad = {
+                    name: p.grad.clone().detach()
+                    for name, p in model.named_parameters()
+                    if p.grad is not None
+                }
+
+                if accum_grads is None:
+                    accum_grads = batch_grad
+                else:
+                    for name in accum_grads:
+                        if name in batch_grad:
+                            accum_grads[name] = accum_grads[name] + batch_grad[name]
+
+                passes_done += 1
+                if passes_done >= K:
+                    break
+            if passes_done >= K:
+                break
+
+        if accum_grads is None or passes_done == 0:
+            return None
+
+        # Average over K passes (Eq. 15)
+        for name in accum_grads:
+            accum_grads[name] = accum_grads[name] / passes_done
+
+        flat = torch.cat([g.flatten() for g in accum_grads.values()])
+
+        return {
+            'gradient_dict': accum_grads,
+            'flat_gradient': flat,
+            'effective_batch_size': passes_done * bs,
+            'accumulation_passes': passes_done,
         }

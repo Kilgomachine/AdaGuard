@@ -105,6 +105,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     weight_delta = result.get('weight_delta', gd)
     flat = result['flat_gradient']
     outputs = result['outputs']
+    labels = result.get('labels', None)
     local_weights = result.get('local_weights', {})
     original_images = result.get('images', None)
 
@@ -131,9 +132,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     metrics['entropy_compute_time'] = timing['entropy']
     metrics.update(entropy_r)
 
-    # Confidence Gap
+    # Confidence Gap (Eq. 4: gap over logit gradients ∂L/∂z)
     conf_gap_metric = ConfidenceGapMetric()
-    cg = conf_gap_metric.compute(outputs)
+    cg = conf_gap_metric.compute(outputs, labels=labels)
     metrics.update(cg)
 
     # Fisher
@@ -289,6 +290,35 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     metrics['label_avg'] = float(label_avg)
     metrics['empirical_avg'] = float(empirical_avg)
 
+    # ── Gradient Accumulation (Paper Section IV.G.2, Eq. 15) ──
+    # When LeakScore >= threshold ("Strong Risk"), accumulate gradients over
+    # K forward-backward passes to inflate effective batch size B_eff = K*B,
+    # making gradient inversion exponentially harder.
+    metrics['grad_accum_activated'] = 0
+    metrics['grad_accum_effective_bs'] = batch_size
+    accum_threshold = config.get('grad_accum_threshold', config.get('T2', 0.7))
+    if (config.get('grad_accum_enabled', True)
+            and combined >= accum_threshold):
+        K = config.get('grad_accum_K', 4)
+        t0_accum = time.perf_counter()
+        model_state = result.get('_local_model_state')
+        if model_state is not None:
+            model_state_gpu = {k: v.to(gpu_device) for k, v in model_state.items()}
+            orig_dev = client.device
+            client.device = gpu_device
+            accum_result = client.compute_accumulated_gradient(
+                model_state_gpu, K, batch_size=batch_size,
+            )
+            client.device = orig_dev
+            if accum_result is not None:
+                # Replace the raw gradient with the accumulated version
+                gd = {k: v.to(gpu_device) for k, v in accum_result['gradient_dict'].items()}
+                flat = accum_result['flat_gradient'].to(gpu_device)
+                metrics['grad_accum_activated'] = 1
+                metrics['grad_accum_effective_bs'] = accum_result['effective_batch_size']
+                metrics['grad_accum_passes'] = accum_result['accumulation_passes']
+        timing['grad_accum'] = time.perf_counter() - t0_accum
+
     metrics['loss'] = result['loss']
     t_total = time.perf_counter() - t_start
     metrics['client_time'] = t_total
@@ -299,8 +329,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         done = _progress_count
         total = _progress_total
 
+    accum_str = f" ACCUM(K={config.get('grad_accum_K', 4)},B_eff={metrics['grad_accum_effective_bs']})" if metrics['grad_accum_activated'] else ""
     parts = [f"train={t_train:.0f}s"]
-    for phase in ['entropy', 'glmip', 'empirical', 'fisher']:
+    for phase in ['entropy', 'glmip', 'empirical', 'fisher', 'grad_accum']:
         t = timing.get(phase, 0)
         if t > 0.1:
             parts.append(f"{phase}={t:.0f}s")
@@ -308,7 +339,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
     gpu_short = str(gpu_device).replace('cuda:', 'GPU')
     print(f"  W{wid:<2d} [{done:3d}/{total}] C{cid:<4d}  "
-          f"loss={metrics['loss']:.4f}  leak={combined:.4f}  "
+          f"loss={metrics['loss']:.4f}  leak={combined:.4f}{accum_str}  "
           f"| {t_total:.0f}s ({time_str})", flush=True)
 
     _release_worker(gpu_device, wid)

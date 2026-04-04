@@ -42,6 +42,13 @@ DEFAULT_CONFIG = {
     'T1': 0.3,
     'T2': 0.7,
 
+    # Gradient Accumulation (Section IV.G.2)
+    # Activated when LeakScore >= grad_accum_threshold (typically T2 = "Strong Risk")
+    # B_eff = K * B where K = grad_accum_K
+    'grad_accum_enabled': True,
+    'grad_accum_K': 4,                # number of accumulation passes
+    'grad_accum_threshold': 0.7,      # LeakScore threshold to trigger (default = T2)
+
     # Entropy metric
     'entropy_bins': 50,
 

@@ -117,6 +117,11 @@ class TBLogger:
         enc = summary.get('actual_pct_encrypted', 0)
         w.add_scalar('Encryption/Pct_Encrypted', enc * 100, step)
 
+        # Gradient Accumulation
+        accum_pct = summary.get('grad_accum_activated', 0)
+        w.add_scalar('GradAccum/Activated_Pct', accum_pct * 100, step)
+        w.add_scalar('GradAccum/Effective_BatchSize', summary.get('grad_accum_effective_bs', 0), step)
+
         # Timing
         if round_time is not None:
             w.add_scalar('Timing/Round_Seconds', round_time, step)
@@ -569,6 +574,12 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
 
         # Encryption
         print(f"  ENCRYPTION     Strategy: {strategy}   Encrypted: {enc:.1f}%", flush=True)
+
+        # Gradient Accumulation
+        accum_active = summary.get('grad_accum_activated', 0)
+        accum_bs = summary.get('grad_accum_effective_bs', 0)
+        if accum_active > 0:
+            print(f"  GRAD ACCUM     Active: {accum_active*100:.0f}% of clients   Avg B_eff: {accum_bs:.0f}", flush=True)
 
         # Privacy metrics (one compact line)
         fc = summary.get('fisher_concentration', 0)

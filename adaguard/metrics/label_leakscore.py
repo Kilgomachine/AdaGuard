@@ -12,18 +12,21 @@ import torch.nn.functional as F
 
 
 class GLMIPMetric:
-    """Gradient-Label Mutual Information Proxy.
+    """Gradient-Label Mutual Information Proxy (Eq. 3 in paper).
 
-    Computes between-class vs within-class gradient variance ratio
-    to estimate how distinguishable class labels are from gradients.
-    Score = S_B / (S_B + S_W), normalized to [0,1].
+    Score_GLMIP = 1 - (-Σ P(g|c) · log P(g|c)) / log(C)
+
+    Computes the entropy of per-class gradient energy.  When gradient
+    energy is uniformly distributed across classes the label is hard to
+    infer (Score → 0).  When one class dominates, the label leaks
+    (Score → 1).
     """
 
     def compute(self, model, dataset, device, criterion,
                 num_classes=10, samples_per_class=20, focus_layers=None):
         model.eval()
 
-        # Fast label indexing — avoid iterating 50K dataset items
+        # Fast label indexing
         if hasattr(dataset, 'targets'):
             targets = dataset.targets
             if isinstance(targets, torch.Tensor):
@@ -39,13 +42,13 @@ class GLMIPMetric:
             for i, l in enumerate(targets):
                 label_idx[int(l)].append(i)
         else:
-            # Fallback: iterate dataset (slow)
             label_idx = defaultdict(list)
             for i in range(len(dataset)):
                 _, l = dataset[i]
                 label_idx[int(l) if isinstance(l, torch.Tensor) else l].append(i)
 
-        class_grads = defaultdict(list)
+        class_grad_norms = {}  # class → list of per-sample gradient L2 norms
+        class_mean_grads = {}  # class → mean gradient vector (for cosine metric)
 
         for c in range(num_classes):
             ids = label_idx.get(c, [])
@@ -53,9 +56,9 @@ class GLMIPMetric:
                 continue
 
             sampled = random.sample(ids, min(samples_per_class, len(ids)))
+            norms = []
+            grads = []
 
-            # Batch processing: accumulate per-sample gradients efficiently
-            # Process in mini-batches of 16 for GPU efficiency
             MINI_BS = 16
             for batch_start in range(0, len(sampled), MINI_BS):
                 batch_ids = sampled[batch_start:batch_start + MINI_BS]
@@ -69,7 +72,6 @@ class GLMIPMetric:
                 img_batch = torch.stack(imgs).to(device)
                 lbl_batch = torch.tensor(lbls, dtype=torch.long, device=device)
 
-                # Per-sample gradients via loop (need individual gradients, not batch mean)
                 for i in range(len(img_batch)):
                     model.zero_grad()
                     out = model(img_batch[i:i+1])
@@ -88,51 +90,88 @@ class GLMIPMetric:
                         ])
 
                     if flat.numel() > 0:
-                        class_grads[c].append(flat)
+                        norms.append(flat.norm(2).item())
+                        grads.append(flat)
 
-        class_means = {c: torch.stack(gs).mean(0) for c, gs in class_grads.items()}
-        all_g = [g for gs in class_grads.values() for g in gs]
-        if not all_g:
+            if norms:
+                class_grad_norms[c] = norms
+                class_mean_grads[c] = torch.stack(grads).mean(0)
+
+        if not class_grad_norms:
             return {'glmip_score': 0.0, 'class_means': {}}
 
-        mu = torch.stack(all_g).mean(0)
+        # Eq. 3: P(g|c) = total gradient energy for class c / total energy
+        class_energy = {
+            c: sum(n ** 2 for n in norms_list)
+            for c, norms_list in class_grad_norms.items()
+        }
+        total_energy = sum(class_energy.values())
+        if total_energy < 1e-12:
+            return {'glmip_score': 0.0, 'class_means': class_mean_grads}
 
-        S_B = sum(
-            len(class_grads[c]) * torch.dot(class_means[c] - mu, class_means[c] - mu).item()
-            for c in class_grads
-        )
-        S_W = sum(
-            torch.dot(g - class_means[c], g - class_means[c]).item()
-            for c in class_grads for g in class_grads[c]
-        )
+        # Probability distribution over classes
+        p_gc = np.array([class_energy.get(c, 0.0) for c in range(num_classes)])
+        p_gc = p_gc / total_energy
+        p_gc = p_gc[p_gc > 0]  # remove zero entries for log
 
-        score = S_B / (S_B + S_W) if (S_B + S_W) > 1e-12 else 0.0
+        C = num_classes
+        H = -np.sum(p_gc * np.log(p_gc))
+        score = 1.0 - H / np.log(C) if C > 1 else 0.0
+
         return {
             'glmip_score': max(0.0, min(1.0, score)),
-            'S_B': S_B,
-            'S_W': S_W,
-            'class_means': class_means,
+            'class_means': class_mean_grads,
         }
 
 
 class ConfidenceGapMetric:
-    """Confidence Gap: max(p) - second_max(p).
+    """Confidence Gap (Eq. 4 in paper).
 
-    High gap means model is confident -> label is strongly encoded.
+    Score_Gap = max(|g_logits|) - second_max(|g_logits|)
+
+    where g_logits = ∂L/∂z = softmax(z) - one_hot(y).
+
+    A wide gap means the true-class gradient is clearly separable from
+    other classes, giving the attacker an analytical label leak (iDLG).
     """
 
-    def compute(self, logits):
+    def compute(self, logits, labels=None):
+        """Compute confidence gap from logit gradients.
+
+        Args:
+            logits: model output logits, shape (B, C)
+            labels: ground-truth labels, shape (B,). If None, falls back
+                    to softmax probability gap (less accurate).
+        """
         if isinstance(logits, torch.Tensor):
-            probs = F.softmax(logits, dim=-1).detach().cpu().numpy()
+            logits_t = logits.detach()
         else:
-            probs = logits
+            logits_t = torch.tensor(logits)
 
-        if probs.ndim == 2:
-            gaps = [np.sort(p)[::-1][0] - np.sort(p)[::-1][1] for p in probs]
-            return {'confidence_gap': max(0.0, min(1.0, float(np.mean(gaps))))}
+        if logits_t.ndim == 1:
+            logits_t = logits_t.unsqueeze(0)
 
-        s = np.sort(probs)[::-1]
-        return {'confidence_gap': max(0.0, min(1.0, float(s[0] - s[1])))}
+        probs = F.softmax(logits_t, dim=-1)
+
+        if labels is not None:
+            # Paper Eq. 4: gradient of cross-entropy w.r.t. logits
+            if isinstance(labels, torch.Tensor):
+                labels_t = labels.detach()
+            else:
+                labels_t = torch.tensor(labels, dtype=torch.long)
+            one_hot = torch.zeros_like(probs)
+            one_hot.scatter_(1, labels_t.unsqueeze(1), 1.0)
+            g_logits = (probs - one_hot).abs().cpu().numpy()
+        else:
+            # Fallback: use softmax probabilities directly
+            g_logits = probs.cpu().numpy()
+
+        gaps = []
+        for row in g_logits:
+            s = np.sort(row)[::-1]
+            gaps.append(s[0] - s[1])
+
+        return {'confidence_gap': max(0.0, min(1.0, float(np.mean(gaps))))}
 
 
 class CosineSimilarityMetric:
