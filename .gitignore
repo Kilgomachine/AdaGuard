@@ -40,3 +40,6 @@ slurm-*.out
 
 # Secrets
 .env
+
+# Local experiment notes
+EXPERIMENT_SUMMARY.md
