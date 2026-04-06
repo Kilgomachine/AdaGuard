@@ -1,114 +1,348 @@
-"""Scenario definitions for Phase 2 post-training attack evaluation.
+"""Scenario definitions for AdaGuard evaluation.
 
-Each scenario specifies:
-  - encryption: which encryption strategy to apply
-  - label_weight, entropy_weight, empirical_weight: LeakScore component weights
-  - T1, T2: AdaptiveEncryptionController thresholds (for AdaGuard scenarios)
+Case 1 — Sensitivity Study (60 scenarios):
+  Sweep one configurable variable at a time, everything else at defaults.
+  Groups: S1-S11 (entropy_bins, grad_accum_K, T1, T2, label/entropy/empirical
+  weights, batch_size, samples_per_class, maskcrypt_enc_pct, focus_layers).
 
-Weight convention (matches user specification):
-  label_weight  * mean(GLMIP, ConfidenceGap, CosineSimilarity)
-  entropy_weight * mean(Shannon, Renyi, MinEntropy)
-  empirical_weight * mean(GradInversion, GI-NAS, GGCDM) lightweight scores
+Case 2 — Viability Study (12 scenarios):
+  Head-to-head comparisons proving AdaGuard works vs competitors.
+  Baselines (no defense, full HE, DP), MaskCrypt (guided + random), AdaGuard
+  variants, scalability tests.
 """
 
-SCENARIOS = {
-    # ── Baselines ──
-    'no_encryption': {
-        'id': 1,
-        'encryption': 'none',
+# ═══════════════════════════════════════════════════════════════════════════════
+# CASE 1: SENSITIVITY STUDY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SENSITIVITY_SCENARIOS = {}
+
+
+def _add_sensitivity_group(group_name, variable, values, defaults=None):
+    """Helper to generate a sweep group."""
+    for i, val in enumerate(values, 1):
+        sid = f"{group_name}.{i}"
+        overrides = {variable: val}
+        if defaults:
+            overrides.update(defaults)
+        SENSITIVITY_SCENARIOS[sid] = {
+            'id': sid,
+            'case': 'sensitivity',
+            'group': group_name,
+            'variable': variable,
+            'value': val,
+            'description': f'{variable}={val}',
+            'config_overrides': overrides,
+        }
+
+
+# S1. Entropy Bins
+_add_sensitivity_group('S1', 'entropy_bins', [10, 25, 50, 100, 200])
+
+# S2. Gradient Accumulation K
+_add_sensitivity_group('S2', 'grad_accum_K', [1, 2, 4, 8])
+
+# S3. Encryption Threshold T1 (T2 fixed at 0.7)
+_add_sensitivity_group('S3', 'T1', [0.1, 0.2, 0.3, 0.4, 0.5],
+                       defaults={'T2': 0.7})
+
+# S4. Encryption Threshold T2 (T1 fixed at 0.3)
+_add_sensitivity_group('S4', 'T2', [0.5, 0.6, 0.7, 0.8, 0.9],
+                       defaults={'T1': 0.3})
+
+# S5. Label Weight alpha
+_add_sensitivity_group('S5', 'label_weight', [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5],
+                       defaults={'entropy_weight': 1.0, 'empirical_weight': 0.0})
+
+# S6. Entropy Weight beta
+_add_sensitivity_group('S6', 'entropy_weight', [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5],
+                       defaults={'label_weight': 1.0, 'empirical_weight': 0.0})
+
+# S7. Empirical Weight gamma
+_add_sensitivity_group('S7', 'empirical_weight', [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5],
+                       defaults={'label_weight': 1.0, 'entropy_weight': 1.0})
+
+# S8. Client Batch Size
+_add_sensitivity_group('S8', 'client_batch_size', [1, 4, 8, 16, 32])
+
+# S9. GLMIP Samples Per Class
+_add_sensitivity_group('S9', 'mi_samples_per_class', [5, 10, 20, 40])
+
+# S10. MaskCrypt Encrypt Ratio rho (gradient-guided mode)
+for i, rho in enumerate([0.01, 0.05, 0.10, 0.20, 0.25], 1):
+    sid = f"S10.{i}"
+    SENSITIVITY_SCENARIOS[sid] = {
+        'id': sid,
+        'case': 'sensitivity',
+        'group': 'S10',
+        'variable': 'maskcrypt_enc_pct',
+        'value': rho,
+        'description': f'MaskCrypt rho={rho}',
+        'config_overrides': {
+            'encryption_top_percent': rho,
+            'encryption': 'maskcrypt',
+            'maskcrypt_mask_mode': 'gradient_guided',
+        },
+    }
+
+# S11. Focus Layers for GLMIP
+_focus_layer_values = [
+    ('all', None),
+    ('final_fc', ['fc2.weight', 'fc2.bias']),
+    ('penultimate_fc', ['fc1.weight', 'fc1.bias']),
+]
+for i, (label, layers) in enumerate(_focus_layer_values, 1):
+    sid = f"S11.{i}"
+    SENSITIVITY_SCENARIOS[sid] = {
+        'id': sid,
+        'case': 'sensitivity',
+        'group': 'S11',
+        'variable': 'focus_layers',
+        'value': label,
+        'description': f'focus_layers={label}',
+        'config_overrides': {
+            'focus_layers': layers,
+        },
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CASE 2: VIABILITY STUDY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+VIABILITY_SCENARIOS = {
+    # -- Baselines --
+    'V1': {
+        'id': 'V1',
+        'case': 'viability',
+        'group': 'baselines',
+        'name': 'no_defense',
         'description': 'No encryption — full gradient exposure (worst case for privacy)',
+        'config_overrides': {
+            'encryption': 'none',
+        },
     },
-    'full_he': {
-        'id': 2,
-        'encryption': 'full',
+    'V2': {
+        'id': 'V2',
+        'case': 'viability',
+        'group': 'baselines',
+        'name': 'full_he',
         'description': 'Full homomorphic encryption — all parameters encrypted (best privacy, worst cost)',
+        'config_overrides': {
+            'encryption': 'full',
+        },
     },
-    'maskcrypt': {
-        'id': 3,
-        'encryption': 'maskcrypt',
-        'description': 'MaskCrypt per paper (Hu & Li 2025) — gradient-guided selective HE',
-        'maskcrypt_enc_pct': 0.1,  # paper default: 10% of parameters
-    },
-
-    # ── AdaGuard threat levels ──
-    'adaguard_high': {
-        'id': 4,
-        'encryption': 'fisher',
-        'description': 'AdaGuard high threat sensitivity — encrypts aggressively',
-        'T1': 0.1, 'T2': 0.4,
-        'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
-    },
-    'adaguard_mid': {
-        'id': 5,
-        'encryption': 'fisher',
-        'description': 'AdaGuard medium threat sensitivity — balanced',
-        'T1': 0.3, 'T2': 0.7,
-        'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
-    },
-    'adaguard_low': {
-        'id': 6,
-        'encryption': 'fisher',
-        'description': 'AdaGuard low threat sensitivity — minimal encryption',
-        'T1': 0.5, 'T2': 0.9,
-        'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+    'V3': {
+        'id': 'V3',
+        'case': 'viability',
+        'group': 'baselines',
+        'name': 'dp_baseline',
+        'description': 'Differential privacy (epsilon=50, delta=1e-5) — industry standard alternative',
+        'config_overrides': {
+            'encryption': 'dp',
+            'dp_epsilon': 50.0,
+            'dp_delta': 1e-5,
+            'dp_clip_norm': 1.0,
+        },
     },
 
-    # ── AdaGuard component ablation ──
-    'label_only': {
-        'id': 7,
-        'encryption': 'fisher',
-        'description': 'AdaGuard with only label leakscore (GLMIP + ConfGap + Cosine)',
-        'label_weight': 1.0, 'entropy_weight': 0.0, 'empirical_weight': 0.0,
+    # -- MaskCrypt Competitor --
+    'V4': {
+        'id': 'V4',
+        'case': 'viability',
+        'group': 'maskcrypt',
+        'name': 'maskcrypt_guided_10',
+        'description': 'MaskCrypt gradient-guided (rho=0.10) — Hu & Li 2025 paper default',
+        'config_overrides': {
+            'encryption': 'maskcrypt',
+            'encryption_top_percent': 0.10,
+            'maskcrypt_mask_mode': 'gradient_guided',
+        },
     },
-    'entropy_only': {
-        'id': 8,
-        'encryption': 'fisher',
-        'description': 'AdaGuard with only entropy leakscore (Shannon + Renyi + MinEntropy)',
-        'label_weight': 0.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
-    },
-    'empirical_only': {
-        'id': 9,
-        'encryption': 'fisher',
-        'description': 'AdaGuard with only empirical leakscore (light 20-iter GI attacks)',
-        'label_weight': 0.0, 'entropy_weight': 0.0, 'empirical_weight': 1.0,
+    'V5': {
+        'id': 'V5',
+        'case': 'viability',
+        'group': 'maskcrypt',
+        'name': 'maskcrypt_random_10',
+        'description': 'MaskCrypt random mask (rho=0.10) — naive baseline for mask selection',
+        'config_overrides': {
+            'encryption': 'maskcrypt',
+            'encryption_top_percent': 0.10,
+            'maskcrypt_mask_mode': 'random',
+        },
     },
 
-    # ── AdaGuard weighted combinations ──
-    '2label_1entropy': {
-        'id': 10,
-        'encryption': 'fisher',
-        'description': 'AdaGuard: 2x label + 1x entropy (label-heavy)',
-        'label_weight': 2.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+    # -- AdaGuard variants --
+    'V6': {
+        'id': 'V6',
+        'case': 'viability',
+        'group': 'adaguard',
+        'name': 'adaguard_default',
+        'description': 'AdaGuard balanced (T1=0.3, T2=0.7)',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'T1': 0.3, 'T2': 0.7,
+            'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+            'grad_accum_enabled': False,
+        },
     },
-    '1label_2entropy': {
-        'id': 11,
-        'encryption': 'fisher',
-        'description': 'AdaGuard: 1x label + 2x entropy (entropy-heavy)',
-        'label_weight': 1.0, 'entropy_weight': 2.0, 'empirical_weight': 0.0,
+    'V7': {
+        'id': 'V7',
+        'case': 'viability',
+        'group': 'adaguard',
+        'name': 'adaguard_with_accum',
+        'description': 'AdaGuard + gradient accumulation (K=4, B_eff=16)',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'T1': 0.3, 'T2': 0.7,
+            'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+            'grad_accum_enabled': True, 'grad_accum_K': 4,
+        },
+    },
+    'V8': {
+        'id': 'V8',
+        'case': 'viability',
+        'group': 'adaguard',
+        'name': 'adaguard_aggressive',
+        'description': 'AdaGuard aggressive (T1=0.1, T2=0.4) — encrypt early, encrypt often',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'T1': 0.1, 'T2': 0.4,
+            'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+        },
+    },
+    'V9': {
+        'id': 'V9',
+        'case': 'viability',
+        'group': 'adaguard',
+        'name': 'adaguard_conservative',
+        'description': 'AdaGuard conservative (T1=0.5, T2=0.9) — minimal encryption',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'T1': 0.5, 'T2': 0.9,
+            'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+        },
+    },
+
+    # -- Scalability --
+    'V10': {
+        'id': 'V10',
+        'case': 'viability',
+        'group': 'scalability',
+        'name': 'adaguard_100_clients',
+        'description': 'AdaGuard at 100 clients (10% participation)',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'T1': 0.3, 'T2': 0.7,
+            'num_clients': 100, 'clients_per_round': 10,
+        },
+    },
+    'V11': {
+        'id': 'V11',
+        'case': 'viability',
+        'group': 'scalability',
+        'name': 'adaguard_1000_clients',
+        'description': 'AdaGuard at 1000 clients (10% participation)',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'T1': 0.3, 'T2': 0.7,
+            'num_clients': 1000, 'clients_per_round': 100,
+        },
+    },
+    'V12': {
+        'id': 'V12',
+        'case': 'viability',
+        'group': 'scalability',
+        'name': 'adaguard_high_participation',
+        'description': 'AdaGuard 50% participation rate (100 clients, 50 per round)',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'T1': 0.3, 'T2': 0.7,
+            'num_clients': 100, 'clients_per_round': 50,
+        },
     },
 }
 
 
-def get_scenario(name):
-    """Get scenario config by name. Raises KeyError if not found."""
-    if name not in SCENARIOS:
-        raise KeyError(f"Unknown scenario '{name}'. Available: {list(SCENARIOS.keys())}")
-    return SCENARIOS[name]
+# ═══════════════════════════════════════════════════════════════════════════════
+# COMBINED REGISTRY + HELPERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+ALL_SCENARIOS = {}
+ALL_SCENARIOS.update(SENSITIVITY_SCENARIOS)
+ALL_SCENARIOS.update(VIABILITY_SCENARIOS)
+
+# Group index for quick lookups
+SENSITIVITY_GROUPS = {}
+for sid, cfg in SENSITIVITY_SCENARIOS.items():
+    grp = cfg['group']
+    if grp not in SENSITIVITY_GROUPS:
+        SENSITIVITY_GROUPS[grp] = []
+    SENSITIVITY_GROUPS[grp].append(sid)
+
+VIABILITY_GROUPS = {}
+for vid, cfg in VIABILITY_SCENARIOS.items():
+    grp = cfg['group']
+    if grp not in VIABILITY_GROUPS:
+        VIABILITY_GROUPS[grp] = []
+    VIABILITY_GROUPS[grp].append(vid)
+
+
+def get_scenario(scenario_id):
+    """Get scenario config by ID (e.g. 'S1.1', 'V4'). Raises KeyError if not found."""
+    if scenario_id not in ALL_SCENARIOS:
+        raise KeyError(
+            f"Unknown scenario '{scenario_id}'. "
+            f"Available: {sorted(ALL_SCENARIOS.keys())}"
+        )
+    return ALL_SCENARIOS[scenario_id]
+
+
+def get_scenarios_by_case(case):
+    """Get all scenarios for a case ('sensitivity' or 'viability')."""
+    if case == 'sensitivity':
+        return dict(SENSITIVITY_SCENARIOS)
+    elif case == 'viability':
+        return dict(VIABILITY_SCENARIOS)
+    else:
+        raise ValueError(f"Unknown case '{case}'. Use 'sensitivity' or 'viability'.")
+
+
+def get_sensitivity_group(group_id):
+    """Get all scenario IDs in a sensitivity group (e.g. 'S1')."""
+    if group_id not in SENSITIVITY_GROUPS:
+        raise KeyError(
+            f"Unknown sensitivity group '{group_id}'. "
+            f"Available: {sorted(SENSITIVITY_GROUPS.keys())}"
+        )
+    return [ALL_SCENARIOS[sid] for sid in SENSITIVITY_GROUPS[group_id]]
 
 
 def list_scenarios():
-    """Print all available scenarios."""
-    print(f"\n{'='*80}")
-    print(f"  Available Scenarios ({len(SCENARIOS)} total)")
-    print(f"{'='*80}")
-    for name, cfg in sorted(SCENARIOS.items(), key=lambda x: x[1]['id']):
-        enc = cfg.get('encryption', '?')
-        lw = cfg.get('label_weight', '-')
-        ew = cfg.get('entropy_weight', '-')
-        empw = cfg.get('empirical_weight', '-')
-        t1 = cfg.get('T1', '-')
-        t2 = cfg.get('T2', '-')
-        print(f"  {cfg['id']:2d}. {name:25s} | enc={enc:10s} | "
-              f"L={lw} E={ew} Emp={empw} | T1={t1} T2={t2}")
-        print(f"      {cfg['description']}")
-    print(f"{'='*80}\n")
+    """Print all available scenarios organized by case and group."""
+    print(f"\n{'=' * 90}")
+    print(f"  AdaGuard Scenarios ({len(ALL_SCENARIOS)} total)")
+    print(f"{'=' * 90}")
+
+    # Sensitivity
+    print(f"\n  CASE 1: SENSITIVITY STUDY ({len(SENSITIVITY_SCENARIOS)} scenarios)")
+    print(f"  {'-' * 86}")
+    for grp_id in sorted(SENSITIVITY_GROUPS.keys()):
+        sids = SENSITIVITY_GROUPS[grp_id]
+        first = ALL_SCENARIOS[sids[0]]
+        var = first['variable']
+        vals = [str(ALL_SCENARIOS[s]['value']) for s in sids]
+        print(f"  {grp_id:5s} | {var:25s} | {len(sids)} runs: [{', '.join(vals)}]")
+
+    # Viability
+    print(f"\n  CASE 2: VIABILITY STUDY ({len(VIABILITY_SCENARIOS)} scenarios)")
+    print(f"  {'-' * 86}")
+    for grp_id in sorted(VIABILITY_GROUPS.keys()):
+        vids = VIABILITY_GROUPS[grp_id]
+        print(f"  {grp_id}:")
+        for vid in vids:
+            cfg = ALL_SCENARIOS[vid]
+            name = cfg.get('name', vid)
+            print(f"    {vid:5s} | {name:30s} | {cfg['description']}")
+
+    print(f"\n{'=' * 90}\n")

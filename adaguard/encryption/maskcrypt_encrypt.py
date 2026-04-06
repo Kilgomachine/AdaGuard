@@ -16,10 +16,15 @@ class MaskCryptEncryptor:
 
     Simulates selective homomorphic encryption by masking the most
     vulnerable parameters from the adversary's view.
+
+    Supports two mask selection modes:
+    - 'gradient_guided': Algorithm 2 from MaskCrypt paper (default)
+    - 'random': uniform random mask selection (baseline comparison)
     """
 
-    def __init__(self, maskcrypt_metric=None, enc_pct=0.1):
+    def __init__(self, maskcrypt_metric=None, enc_pct=0.1, mask_mode='gradient_guided'):
         self.maskcrypt_metric = maskcrypt_metric or MaskCryptMetric(enc_pct=enc_pct)
+        self.mask_mode = mask_mode
 
     def encrypt(self, gradient_dict, old_weights, new_weights, k=None,
                 maskcrypt_result=None):
@@ -37,7 +42,11 @@ class MaskCryptEncryptor:
             metadata: encryption details
         """
         if maskcrypt_result is None:
-            if k is not None:
+            if self.mask_mode == 'random':
+                maskcrypt_result = self.maskcrypt_metric.compute_random_mask(
+                    gradient_dict, old_weights, new_weights,
+                )
+            elif k is not None:
                 total_params = sum(g.numel() for g in gradient_dict.values())
                 enc_pct = k / max(total_params, 1)
                 maskcrypt_result = self.maskcrypt_metric.compute_with_dynamic_k(

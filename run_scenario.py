@@ -87,11 +87,11 @@ def main():
             attack_config = yaml.safe_load(f) or {}
     attack_config['max_attack_clients'] = args.max_attack_clients
 
-    from adaguard.scenarios.registry import SCENARIOS, get_scenario
+    from adaguard.scenarios.registry import ALL_SCENARIOS, get_scenario
 
     # Determine which scenarios to run
     if args.scenario == 'all':
-        scenario_names = list(SCENARIOS.keys())
+        scenario_names = list(ALL_SCENARIOS.keys())
     else:
         scenario_names = [args.scenario]
 

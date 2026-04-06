@@ -82,6 +82,12 @@ DEFAULT_CONFIG = {
     # Fisher / MaskCrypt
     'fisher_topk': 50,
     'encryption_top_percent': 0.1,
+    'maskcrypt_mask_mode': 'gradient_guided',  # 'gradient_guided' or 'random'
+
+    # Differential Privacy baseline
+    'dp_epsilon': 50.0,
+    'dp_delta': 1e-5,
+    'dp_clip_norm': 1.0,
 
     # Focus layers (where label info concentrates per iDLG theorem)
     'focus_layers': ['fc2.weight', 'fc2.bias'],

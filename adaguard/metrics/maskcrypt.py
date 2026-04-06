@@ -79,6 +79,66 @@ class MaskCryptMetric:
             'maskcrypt_topk_indices': topk_idx.detach().cpu(),
         }
 
+    def compute_random_mask(self, gradient_dict, old_weights, new_weights):
+        """Compute MaskCrypt with random mask selection instead of gradient-guided.
+
+        Same encrypt ratio, but indices chosen uniformly at random.
+        Used as a baseline to show value of gradient-guided selection.
+        """
+        # Still need total param count and gradient stats
+        all_v = []
+        for name in gradient_dict:
+            if name not in old_weights or name not in new_weights:
+                continue
+            grad = gradient_dict[name].flatten()
+            old_w = old_weights[name].flatten().to(grad.device)
+            new_w = new_weights[name].flatten().to(grad.device)
+            v = grad * (old_w - new_w)
+            all_v.append(v)
+
+        if not all_v:
+            return self._empty()
+
+        v_all = torch.cat(all_v)
+        v_abs = v_all.abs()
+        n = v_abs.numel()
+        total_v = v_abs.sum().item()
+
+        if total_v < 1e-20:
+            return self._empty()
+
+        k = max(1, int(self.enc_pct * n))
+
+        # Random mask: pick k indices uniformly at random
+        perm = torch.randperm(n)[:k]
+        encrypt_mask = torch.zeros(n, dtype=torch.bool)
+        encrypt_mask[perm] = True
+
+        topk_v = v_abs[perm]
+        top_fraction = topk_v.sum().item() / total_v
+
+        v_l2 = torch.norm(v_abs, 2).item()
+        v_l2_norm = (
+            v_l2 / (math.sqrt(n) * v_abs.max().item())
+            if v_abs.max().item() > 1e-20
+            else 0.0
+        )
+
+        return {
+            'maskcrypt_vuln_score': max(0.0, min(1.0, top_fraction)),
+            'maskcrypt_l2_score': max(0.0, min(1.0, v_l2_norm)),
+            'maskcrypt_per_weight': v_all.detach().cpu(),
+            'maskcrypt_per_weight_abs': v_abs.detach().cpu(),
+            'maskcrypt_per_layer': {},
+            'maskcrypt_total_v': total_v,
+            'maskcrypt_encrypt_mask': encrypt_mask.cpu(),
+            'maskcrypt_weights_to_protect': int(encrypt_mask.sum().item()),
+            'maskcrypt_threshold': 0.0,  # no threshold for random
+            'maskcrypt_topk_values': topk_v.detach().cpu(),
+            'maskcrypt_topk_indices': perm.cpu(),
+            'mask_mode': 'random',
+        }
+
     def compute_with_dynamic_k(self, gradient_dict, old_weights, new_weights, encrypt_pct):
         """Compute MaskCrypt with a dynamically determined encryption percentage."""
         old_pct = self.enc_pct

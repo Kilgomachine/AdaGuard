@@ -16,14 +16,24 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from ..config import load_config, get_device
+from ..config import load_config, get_device, DEFAULT_CONFIG
 from ..metrics.combined import CombinedLeakScore
-from ..encryption import AdaptiveEncryptionController, FisherEncryptor, MaskCryptEncryptor
+from ..encryption import (AdaptiveEncryptionController, DPNoiseEncryptor,
+                           FisherEncryptor, MaskCryptEncryptor)
 from ..metrics.fisher import FisherInformationMetric
 from ..metrics.maskcrypt import MaskCryptMetric
 from ..federation.aggregator import fedavg_aggregate_state_dicts, fedavg_aggregate, apply_gradient_update
 from ..models import create_model
 from ..utils.reconstruction import compute_all_reconstruction_metrics
+
+
+def _resolve_scenario_config(scenario):
+    """Merge scenario config_overrides onto DEFAULT_CONFIG to get effective config."""
+    import copy
+    effective = copy.deepcopy(DEFAULT_CONFIG)
+    overrides = scenario.get('config_overrides', {})
+    effective.update(overrides)
+    return effective
 
 
 class ScenarioRunner:
@@ -33,7 +43,7 @@ class ScenarioRunner:
         """
         Args:
             artifacts_dir: path to saved training artifacts from Phase 1
-            scenario_config: dict from registry (encryption, weights, thresholds)
+            scenario_config: dict from registry (with 'config_overrides' key)
             attack_config: dict of attack hyperparameters (gi_iters, etc.)
             device: torch device (auto-detected if None)
         """
@@ -49,26 +59,41 @@ class ScenarioRunner:
         with open(meta_path) as f:
             self.metadata = json.load(f)
 
-        self.config = self.metadata['config']
+        self.training_config = self.metadata['config']
+
+        # Resolve effective config: defaults + scenario overrides
+        self.config = _resolve_scenario_config(scenario_config)
 
         # Set up encryption for this scenario
-        enc_type = self.scenario.get('encryption', 'fisher')
-        T1 = self.scenario.get('T1', self.config.get('T1', 0.3))
-        T2 = self.scenario.get('T2', self.config.get('T2', 0.7))
+        enc_type = self.config.get('encryption', 'fisher')
+        T1 = self.config.get('T1', 0.3)
+        T2 = self.config.get('T2', 0.7)
         enc_pct = self.config.get('encryption_top_percent', 0.1)
 
         self.controller = AdaptiveEncryptionController(T1=T1, T2=T2, base_encrypt_pct=enc_pct)
         self.fisher_encryptor = FisherEncryptor(
             fisher_metric=FisherInformationMetric(enc_pct=enc_pct)
         )
+
+        # MaskCrypt with mode support (gradient_guided or random)
+        mask_mode = self.config.get('maskcrypt_mask_mode', 'gradient_guided')
         self.maskcrypt_metric = MaskCryptMetric(enc_pct=enc_pct)
-        self.maskcrypt_encryptor = MaskCryptEncryptor(maskcrypt_metric=self.maskcrypt_metric)
+        self.maskcrypt_encryptor = MaskCryptEncryptor(
+            maskcrypt_metric=self.maskcrypt_metric, enc_pct=enc_pct, mask_mode=mask_mode,
+        )
+
+        # DP noise encryptor
+        self.dp_encryptor = DPNoiseEncryptor(
+            epsilon=self.config.get('dp_epsilon', 50.0),
+            delta=self.config.get('dp_delta', 1e-5),
+            clip_norm=self.config.get('dp_clip_norm', 1.0),
+        )
 
         # LeakScore with scenario weights
         self.combined_metric = CombinedLeakScore(
-            label_weight=self.scenario.get('label_weight', 1.0),
-            entropy_weight=self.scenario.get('entropy_weight', 1.0),
-            empirical_weight=self.scenario.get('empirical_weight', 0.0),
+            label_weight=self.config.get('label_weight', 1.0),
+            entropy_weight=self.config.get('entropy_weight', 1.0),
+            empirical_weight=self.config.get('empirical_weight', 0.0),
         )
 
         # Detect GPUs
@@ -76,6 +101,88 @@ class ScenarioRunner:
             self.gpu_devices = [torch.device(f'cuda:{i}') for i in range(torch.cuda.device_count())]
         else:
             self.gpu_devices = [torch.device('cpu')]
+
+    def _needs_metric_recompute(self):
+        """Check if this scenario changes metric computation parameters.
+
+        If the scenario overrides entropy_bins, mi_samples_per_class, or
+        focus_layers, the saved metrics from Phase 1 are no longer valid
+        and must be recomputed from the raw artifacts.
+
+        Returns:
+            set of metric categories to recompute: 'entropy', 'label', or both
+        """
+        overrides = self.scenario.get('config_overrides', {})
+        recompute = set()
+
+        # Entropy bins affects Shannon, Renyi, MinEntropy
+        if 'entropy_bins' in overrides:
+            training_bins = self.training_config.get('entropy_bins', 50)
+            if overrides['entropy_bins'] != training_bins:
+                recompute.add('entropy')
+
+        # GLMIP samples_per_class or focus_layers affect label metrics
+        if 'mi_samples_per_class' in overrides:
+            training_spc = self.training_config.get('mi_samples_per_class', 20)
+            if overrides['mi_samples_per_class'] != training_spc:
+                recompute.add('label')
+        if 'focus_layers' in overrides:
+            training_fl = self.training_config.get('focus_layers')
+            if overrides['focus_layers'] != training_fl:
+                recompute.add('label')
+
+        return recompute
+
+    def _recompute_entropy_metrics(self, art, global_state):
+        """Recompute entropy metrics with scenario's entropy_bins setting."""
+        from ..metrics.entropy_leakscore import (
+            ShannonEntropyMetric, RenyiEntropyMetric, MinEntropyMetric
+        )
+        bins = self.config.get('entropy_bins', 50)
+        flat = art['flat_gradient']
+
+        shannon = ShannonEntropyMetric(n_bins=bins).compute(flat)
+        renyi = RenyiEntropyMetric(n_bins=bins).compute(flat)
+        min_ent = MinEntropyMetric(n_bins=bins).compute(flat)
+
+        entropy_avg = np.mean([
+            shannon.get('shannon_score', 0.0),
+            renyi.get('renyi_score', 0.0),
+            min_ent.get('min_entropy_score', 0.0),
+        ])
+        return entropy_avg
+
+    def _recompute_label_metrics(self, art, global_state):
+        """Recompute label metrics with scenario's focus_layers/samples settings."""
+        from ..metrics.label_leakscore import (
+            GLMIPMetric, ConfidenceGapMetric, CosineSimilarityMetric
+        )
+        focus_layers = self.config.get('focus_layers')
+        spc = self.config.get('mi_samples_per_class', 20)
+        num_classes = self.config.get('num_classes', 10)
+
+        scores = []
+
+        # ConfidenceGap uses saved outputs + labels (no model needed)
+        outputs = art.get('outputs')
+        labels = art.get('labels')
+        if outputs is not None:
+            cg = ConfidenceGapMetric()
+            cg_result = cg.compute(outputs, labels=labels)
+            scores.append(cg_result.get('confidence_gap', 0.0))
+
+        # CosineSimilarity uses saved gradient
+        gd = art['gradient_dict']
+        cos_metric = CosineSimilarityMetric()
+        cos_result = cos_metric.compute(gd, focus_layers=focus_layers)
+        scores.append(cos_result.get('cosine_similarity_score', 0.0))
+
+        # GLMIP requires model + dataset — skip if not available on CPU
+        # (it's expensive; use saved value as fallback)
+        saved_glmip = art.get('metrics', {}).get('glmip_score', 0.0)
+        scores.append(saved_glmip)
+
+        return float(np.mean(scores)) if scores else 0.0
 
     def get_saved_rounds(self):
         """Return sorted list of round indices that have saved artifacts."""
@@ -104,9 +211,11 @@ class ScenarioRunner:
         if not round_dir.exists():
             raise FileNotFoundError(f"No artifacts for round {rnd} at {round_dir}")
 
+        enc_type = self.config.get('encryption', 'fisher')
+
         print(f"\n{'='*70}")
         print(f"  SCENARIO: {self.scenario.get('description', '?')}")
-        print(f"  Round {rnd} — encryption={self.scenario['encryption']}")
+        print(f"  Round {rnd} — encryption={enc_type}")
         print(f"{'='*70}")
 
         # Load global model state for this round
@@ -131,8 +240,13 @@ class ScenarioRunner:
 
         print(f"  Loaded {len(client_artifacts)} client artifacts")
 
+        # Check if this scenario requires recomputing metrics from raw data
+        recompute_categories = self._needs_metric_recompute()
+        if recompute_categories:
+            print(f"  Recomputing metrics: {recompute_categories} "
+                  f"(scenario overrides training-time parameters)")
+
         # ── Phase 1: Apply encryption to each client's gradients ──
-        enc_type = self.scenario.get('encryption', 'fisher')
         protected_state_dicts = []
         protected_gradients = []
         round_metrics = {
@@ -147,14 +261,22 @@ class ScenarioRunner:
         for cid, art in client_artifacts.items():
             metrics = art.get('metrics', {})
 
-            # Recompute leakscore with scenario's weights
+            # Start from saved metrics, then recompute what the scenario changes
             entropy_avg = metrics.get('entropy_avg', 0.0)
             label_avg = metrics.get('label_avg', 0.0)
             empirical_avg = metrics.get('empirical_avg', 0.0)
 
+            # Recompute entropy if bins changed (S1)
+            if 'entropy' in recompute_categories:
+                entropy_avg = self._recompute_entropy_metrics(art, global_state)
+
+            # Recompute label if focus_layers or samples_per_class changed (S9, S11)
+            if 'label' in recompute_categories:
+                label_avg = self._recompute_label_metrics(art, global_state)
+
             # If this scenario uses empirical_weight > 0 and we need fresh empirical scores,
             # run lightweight attacks here (20 iterations, not full 20K)
-            if self.scenario.get('empirical_weight', 0.0) > 0 and empirical_avg == 0.0:
+            if self.config.get('empirical_weight', 0.0) > 0 and empirical_avg == 0.0:
                 empirical_avg = self._run_lightweight_attacks(art, global_state)
 
             combined = self.combined_metric.compute(entropy_avg, label_avg, empirical_avg)
@@ -170,17 +292,16 @@ class ScenarioRunner:
             elif enc_type == 'full':
                 protected_gd = {n: torch.zeros_like(g) for n, g in gd_cpu.items()}
                 pct_encrypted = 1.0
+            elif enc_type == 'dp':
+                protected_gd, dp_meta = self.dp_encryptor.encrypt(gd_cpu)
+                pct_encrypted = 0.0  # DP adds noise, doesn't "encrypt" specific params
             elif enc_type == 'maskcrypt':
-                # MaskCrypt needs exposed weights and local weights
-                # Use global state as exposed weights (simplified for replay)
                 exposed_w = {k: v for k, v in global_state.items() if k in gd_cpu}
                 local_w = art.get('local_weights', {})
-                mc_pct = self.scenario.get('maskcrypt_enc_pct', 0.1)
-                mc_metric = MaskCryptMetric(enc_pct=mc_pct)
-                mc_result = mc_metric.compute(gd_cpu, exposed_w, local_w)
-                k = int(mc_pct * total_params)
+                mc_pct = self.config.get('encryption_top_percent', 0.1)
+                # Use pre-configured encryptor (handles gradient_guided vs random)
                 protected_gd, enc_meta = self.maskcrypt_encryptor.encrypt(
-                    gd_cpu, exposed_w, local_w, k=k, maskcrypt_result=mc_result,
+                    gd_cpu, exposed_w, local_w,
                 )
                 pct_encrypted = enc_meta.get('pct_encrypted', mc_pct)
             else:  # 'fisher'
