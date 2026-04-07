@@ -298,19 +298,15 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
     set_seed(config['seed'])
     device = get_device()
 
-    gpu_name = ''
-    if device.type == 'cuda':
-        n_gpu = torch.cuda.device_count()
-        gpu_name = torch.cuda.get_device_name(0)
-        vram = torch.cuda.get_device_properties(0).total_mem / 1e9 if hasattr(torch.cuda.get_device_properties(0), 'total_mem') else torch.cuda.get_device_properties(0).total_memory / 1e9
-    else:
-        n_gpu = 0
-        vram = 0
+    from adaguard.utils.gpu import get_optimal_config, print_gpu_summary
+    gpu_cfg = get_optimal_config(config, verbose=False)
+    device = gpu_cfg['device']
+    n_gpu = gpu_cfg['num_gpus']
 
     print(f"\n{'='*70}")
     print(f"  AdaGuard Federated Learning Experiment")
     print(f"{'='*70}")
-    print(f"  Device       {device} ({n_gpu}x {gpu_name}, {vram:.0f}GB)" if n_gpu else f"  Device       {device}")
+    print_gpu_summary() if n_gpu else print(f"  Device       CPU")
     print(f"  Strategy     {strategy}")
     print(f"  Clients      {config['num_clients']} total, {config['clients_per_round']}/round")
     print(f"  Rounds       {config['num_rounds']}")

@@ -385,10 +385,12 @@ class FederatedSimulator:
         self.device = device
         self.criterion = nn.CrossEntropyLoss()
 
-        # Detect available GPUs
-        self.gpu_devices = _get_gpu_devices()
-        self.num_gpus = len(self.gpu_devices)
-        print(f"Multi-GPU: {self.num_gpus} device(s) available: {self.gpu_devices}")
+        # Detect available GPUs with adaptive allocation
+        from ..utils.gpu import get_optimal_config
+        gpu_cfg = get_optimal_config(config, verbose=True)
+        self.gpu_devices = gpu_cfg['devices']
+        self.num_gpus = gpu_cfg['num_gpus'] or 1  # at least 1 (CPU)
+        self._auto_clients_per_gpu = gpu_cfg['clients_per_gpu']
 
         # Create clients (on primary device initially)
         self.clients = {
@@ -470,9 +472,10 @@ class FederatedSimulator:
             }
 
         # Assign clients to GPUs round-robin
-        cpg = self.config.get('clients_per_gpu', 3)
+        # Use auto-detected value unless config explicitly sets clients_per_gpu > 0
+        cpg = self.config.get('clients_per_gpu', 0)
         if cpg <= 0:
-            cpg = max(1, len(selected) // self.num_gpus)
+            cpg = self._auto_clients_per_gpu
         clients_per_gpu = cpg
         max_workers = min(len(selected), self.num_gpus * clients_per_gpu)
 

@@ -96,11 +96,10 @@ class ScenarioRunner:
             empirical_weight=self.config.get('empirical_weight', 0.0),
         )
 
-        # Detect GPUs
-        if torch.cuda.is_available():
-            self.gpu_devices = [torch.device(f'cuda:{i}') for i in range(torch.cuda.device_count())]
-        else:
-            self.gpu_devices = [torch.device('cpu')]
+        # Detect GPUs with adaptive allocation
+        from ..utils.gpu import get_optimal_config
+        gpu_cfg = get_optimal_config(self.config, verbose=True)
+        self.gpu_devices = gpu_cfg['devices']
 
     def _needs_metric_recompute(self):
         """Check if this scenario changes metric computation parameters.

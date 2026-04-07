@@ -25,7 +25,6 @@
 # =============================================================
 
 echo "Task $SLURM_ARRAY_TASK_ID of job $SLURM_ARRAY_JOB_ID on $(hostname) at $(date)"
-echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | tr '\n' ', ')"
 
 module load Python/3.10.14
 module load CUDA/12.4
@@ -34,6 +33,9 @@ source /projects/secure-distributed-ml/venv/bin/activate
 export DATA_DIR="/scratch/projects/secure-distributed-ml/data"
 export PYTHONUNBUFFERED=1
 cd /projects/secure-distributed-ml/AdaGuard
+
+# Print GPU summary (auto-detects whatever Slurm allocated)
+python -c "from adaguard.utils.gpu import print_gpu_summary; print_gpu_summary()"
 
 # Map array index to seed and strategy
 SEEDS=(42 42 42 42 123 123 123 123 456 456 456 456)

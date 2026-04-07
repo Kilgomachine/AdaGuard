@@ -3,9 +3,9 @@
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/study-%A_%a.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/study-%A_%a.err
 #SBATCH --partition=general-long
-#SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=0
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
 #SBATCH --time=48:00:00
 #SBATCH --array=0-71
 #SBATCH --mail-type=END,FAIL
@@ -39,7 +39,6 @@
 # =============================================================
 
 echo "Task $SLURM_ARRAY_TASK_ID of job $SLURM_ARRAY_JOB_ID on $(hostname) at $(date)"
-echo "GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | tr '\n' ', ')"
 
 module load Python/3.10.14
 module load CUDA/12.4
@@ -48,6 +47,9 @@ source /projects/secure-distributed-ml/venv/bin/activate
 export DATA_DIR="/scratch/projects/secure-distributed-ml/data"
 export PYTHONUNBUFFERED=1
 cd /projects/secure-distributed-ml/AdaGuard
+
+# Print GPU summary (auto-detects whatever Slurm allocated)
+python -c "from adaguard.utils.gpu import print_gpu_summary; print_gpu_summary()"
 
 # Configurable via environment variables
 STRATEGY="${STRATEGY:-fisher}"

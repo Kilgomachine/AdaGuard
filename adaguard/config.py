@@ -93,7 +93,7 @@ DEFAULT_CONFIG = {
     'focus_layers': ['fc2.weight', 'fc2.bias'],
 
     # Parallelism
-    'clients_per_gpu': 3,  # max concurrent clients per GPU (0 = auto)
+    'clients_per_gpu': 0,  # 0 = auto-detect based on GPU VRAM (V100 16GB → 3, A100 40GB → 6)
 
     # Experiment sweeps
     'batch_sizes_experiment': [1, 4, 8, 16, 32, 64],
