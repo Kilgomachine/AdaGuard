@@ -50,6 +50,7 @@ class EmpiricalLeakScoreMetric:
         recon_psnrs = []
         recon_ssims = []
 
+        n_failed = 0
         for attack, key in [
             (self.gi_attack, 'empirical_gradinversion'),
             (self.ginas_attack, 'empirical_ginas'),
@@ -68,11 +69,27 @@ class EmpiricalLeakScoreMetric:
                     recon_psnrs.append(r[f'{prefix}_psnr'])
                     recon_ssims.append(r[f'{prefix}_ssim'])
             except Exception as e:
+                # BUG FIX: do NOT append 0.0 on failure. Averaging a crashed
+                # attack as "no leakage" hides real vulnerabilities — if one
+                # attack finds 0.99 leakage and two crash, mean([0.99,0,0])
+                # = 0.33 masks the fact that the client is compromised via
+                # the one working vector. Instead mark the failure with None
+                # so downstream can drop it from the mean, and also expose
+                # a pessimistic empirical_max for the adaptive controller.
                 print(f"  [WARN] {key}: {e}")
-                results[key] = 0.0
-                scores.append(0.0)
+                results[key] = None
+                n_failed += 1
 
-        results['empirical_mean'] = float(np.mean(scores))
+        # Aggregate across successful attacks only.
+        if scores:
+            results['empirical_mean'] = float(np.mean(scores))
+            results['empirical_max']  = float(np.max(scores))
+        else:
+            # All three attacks crashed. We genuinely do not know the risk —
+            # report 0.0 but flag n_failed so the caller can decide policy.
+            results['empirical_mean'] = 0.0
+            results['empirical_max']  = 0.0
+        results['empirical_n_failed'] = n_failed
 
         # Aggregate reconstruction quality across attacks
         if recon_mses:

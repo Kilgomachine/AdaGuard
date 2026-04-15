@@ -135,7 +135,11 @@ class FLClient:
             'weight_delta': gradient_dict,          # param delta for encryption
             'flat_gradient': raw_flat,
             'loss': last_loss,
-            'outputs': last_outputs,
+            # BUG FIX: outputs must be synchronized with raw_gradient_dict.
+            # Previously returned `last_outputs` captured before optimizer.step(),
+            # which left ConfidenceGap evaluating model state at t-1 while the
+            # gradients being protected were from state t.
+            'outputs': raw_outputs.detach(),
             'labels': last_labels,
             'local_weights': local_weights,         # param-only local weights
             'local_state_dict': local_state_dict,   # full state including BN

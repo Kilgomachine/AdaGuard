@@ -172,16 +172,16 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['fisher_per_param_us'] = metrics['fisher_compute_time'] * 1e6 / total_params
 
     # ── GLMIP + Empirical: run inline OR defer ──
-    if save_dir is not None:
+    # BUG FIX: in deferred mode we intentionally do NOT populate glmip_score /
+    # cosine_leak_score / empirical_* so that the label_avg/empirical_avg
+    # computation below skips them rather than diluting the true risk with 0.0.
+    # Compute-time / reconstruction placeholders are still set for logging.
+    deferred_attacks = save_dir is not None
+    if deferred_attacks:
         # DEFERRED MODE: save data for later attack computation
-        # Set placeholder scores (will be filled in by run_attacks.py)
-        metrics['glmip_score'] = 0.0
+        # (scores will be filled in by run_attacks.py on the saved artifacts)
         metrics['glmip_compute_time'] = 0.0
-        metrics['cosine_leak_score'] = 0.0
         metrics['mean_cosine_similarity'] = 0.0
-        metrics['empirical_gradinversion'] = 0.0
-        metrics['empirical_ginas'] = 0.0
-        metrics['empirical_ggcdm'] = 0.0
         metrics['empirical_mean'] = 0.0
         metrics['empirical_compute_time'] = 0.0
         metrics['recon_mse'] = 0.0
@@ -268,27 +268,61 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         entropy_weight=config.get('entropy_weight', config.get('alpha', 1.0)),
         empirical_weight=config.get('empirical_weight', config.get('gamma', 0.0)),
     )
+    # Entropy components are always computed — safe to average directly.
     entropy_avg = np.mean([
         metrics['shannon_leak_score'],
         metrics['renyi_leak_score'],
         metrics['min_entropy_leak_score'],
     ])
-    label_avg = np.mean([
-        metrics.get('glmip_score', 0.0),
-        metrics['confidence_gap'],
-        metrics.get('cosine_leak_score', 0.0),
-    ])
-    empirical_avg = np.mean([
-        metrics.get('empirical_gradinversion', 0.0),
-        metrics.get('empirical_ginas', 0.0),
-        metrics.get('empirical_ggcdm', 0.0),
-    ])
 
-    combined = combined_metric.compute(entropy_avg, label_avg, empirical_avg)
+    # BUG FIX: only average the label components that were actually computed.
+    # ConfidenceGap is always available; GLMIP and CosineSimilarity are skipped
+    # when skip_glmip is set (or in --defer-attacks mode). Previously the code
+    # plugged 0.0 into np.mean() for the skipped components, artificially
+    # dividing the true LeakScore by 3 and hiding the threat from the adaptive
+    # encryption controller.
+    label_scores = [metrics['confidence_gap']]
+    if not skip_glmip and 'glmip_score' in metrics:
+        label_scores.append(metrics['glmip_score'])
+    if not skip_glmip and 'cosine_leak_score' in metrics:
+        label_scores.append(metrics['cosine_leak_score'])
+    label_avg = float(np.mean(label_scores))
+
+    # BUG FIX: same dilution issue for empirical metrics. Only average the
+    # attacks that actually ran. If empirical is skipped entirely we report
+    # 0.0 (genuinely not measured — the combined weight should also be 0).
+    #
+    # For the adaptive controller we prefer the pessimistic bound: if any
+    # single attack found a strong leak, we treat the client as vulnerable
+    # even if the other attacks were weaker or crashed. The mean is kept for
+    # logging/analysis only.
+    if not skip_empirical and 'empirical_gradinversion' in metrics:
+        empirical_components = [
+            metrics['empirical_gradinversion'],
+            metrics['empirical_ginas'],
+            metrics['empirical_ggcdm'],
+        ]
+        # Drop any None markers from failed attacks (see empirical_leakscore.py).
+        empirical_components = [c for c in empirical_components if c is not None]
+        if empirical_components:
+            empirical_avg = float(np.mean(empirical_components))
+            # Pessimistic bound — fed into the adaptive controller below.
+            empirical_risk = float(np.max(empirical_components))
+        else:
+            empirical_avg = 0.0
+            empirical_risk = 0.0
+    else:
+        empirical_avg = 0.0
+        empirical_risk = 0.0
+
+    # Feed the pessimistic empirical_risk (max across attacks) into the
+    # combined leakscore that drives the adaptive controller, not the mean.
+    combined = combined_metric.compute(entropy_avg, label_avg, empirical_risk)
     metrics['combined_leakscore'] = combined
     metrics['entropy_avg'] = float(entropy_avg)
     metrics['label_avg'] = float(label_avg)
     metrics['empirical_avg'] = float(empirical_avg)
+    metrics['empirical_risk'] = float(empirical_risk)
 
     # ── Gradient Accumulation (Paper Section IV.G.2, Eq. 15) ──
     # When LeakScore >= threshold ("Strong Risk"), accumulate gradients over
