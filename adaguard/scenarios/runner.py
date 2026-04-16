@@ -282,7 +282,11 @@ class ScenarioRunner:
 
             # Apply encryption
             gd_cpu = art['gradient_dict']
-            fisher_r = art.get('fisher_result', {})
+            # fisher_result was dropped from slim artifacts — recompute as g^2
+            # (Fisher information diagonal ≈ E[grad^2] per parameter)
+            fisher_r = art.get('fisher_result')
+            if not fisher_r:
+                fisher_r = {k: (v * v) for k, v in gd_cpu.items()}
             total_params = sum(g.numel() for g in gd_cpu.values())
 
             if enc_type == 'none':
@@ -296,7 +300,12 @@ class ScenarioRunner:
                 pct_encrypted = 0.0  # DP adds noise, doesn't "encrypt" specific params
             elif enc_type == 'maskcrypt':
                 exposed_w = {k: v for k, v in global_state.items() if k in gd_cpu}
-                local_w = art.get('local_weights', {})
+                # local_weights was dropped from slim artifacts — derive from
+                # weight_delta (local_w = global_w - weight_delta)
+                local_w = art.get('local_weights')
+                if not local_w:
+                    wd = art.get('weight_delta', {})
+                    local_w = {k: (exposed_w[k] - wd[k]) for k in wd if k in exposed_w}
                 mc_pct = self.config.get('encryption_top_percent', 0.1)
                 # Use pre-configured encryptor (handles gradient_guided vs random)
                 protected_gd, enc_meta = self.maskcrypt_encryptor.encrypt(
@@ -404,7 +413,8 @@ class ScenarioRunner:
             focus_layers=self.config.get('focus_layers', []),
         )
         gd = {k: v.to(self.device) for k, v in artifact['gradient_dict'].items()}
-        flat = artifact['flat_gradient'].to(self.device)
+        # flat_gradient was dropped from slim artifacts — recompute on the fly
+        flat = torch.cat([g.flatten() for g in gd.values()])
         images = artifact.get('images')
         if images is not None:
             images = images.to(self.device)

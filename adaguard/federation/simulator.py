@@ -380,24 +380,27 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
     local_state_cpu = {k: v.cpu() for k, v in result.get('local_state_dict', {}).items()}
 
-    # ── Save comprehensive artifact for Phase 2 scenario replay ──
+    # ── Save slim artifact for Phase 2 scenario replay ──
+    # Drop redundant fields to fit the 10 TB project quota:
+    #   flat_gradient   → recompute from gradient_dict (microseconds)
+    #   fisher_result   → recompute as g^2 from gradient_dict
+    #   outputs         → recompute from images + per-round global_model.pt
+    #   local_state_dict→ not needed for privacy scenarios (only accuracy)
+    #   local_weights   → derivable as global_state - weight_delta
+    # We keep weight_delta because MaskCrypt scenarios need the
+    # (old_weights, new_weights) pair and this is the compact form.
+    # Per-client size: ~290 MB → ~90 MB. Total for 250 rounds × 12
+    # experiments ≈ 8 TB (fits under 10 TB quota).
     if artifacts_dir is not None:
         artifact = {
             'client_id': cid,
             'gradient_dict': {k: v.cpu() for k, v in gd.items()},
             'weight_delta': weight_delta_cpu,
-            'local_state_dict': local_state_cpu,
-            'local_weights': {k: v.cpu() for k, v in local_weights.items()},
-            'flat_gradient': flat.cpu(),
-            'outputs': outputs.cpu(),
-            'fisher_result': {k: (v.cpu() if isinstance(v, torch.Tensor) else v)
-                              for k, v in fisher_r.items()},
             'metrics': metrics.copy(),
+            'labels': result.get('labels', torch.tensor([])).cpu(),
         }
         if original_images is not None:
             artifact['images'] = original_images.cpu()
-        # Save labels from the client's last batch
-        artifact['labels'] = result.get('labels', torch.tensor([])).cpu()
 
         import os
         os.makedirs(artifacts_dir, exist_ok=True)
