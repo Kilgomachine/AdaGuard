@@ -490,13 +490,20 @@ def run_fl_experiment(config_path, strategy, skip_glmip, skip_empirical, output_
         print(f"  Artifacts dir: {artifacts_dir}")
 
     # Run FL rounds
-    # If deferring attacks, save client data next to output for later processing
+    # If deferring attacks, save client data next to output for later processing.
+    # BUT: when --artifacts-dir is also set (Phase 2 scenario replay), the
+    # artifacts already contain gradient_dict + weight_delta + labels + images,
+    # so the separate client_data save is redundant and doubles disk usage.
+    # Skip it to stay under the project quota.
     attack_save_dir = None
     if defer_attacks:
-        attack_save_dir = str(Path(output_path).parent / f'client_data_{Path(output_path).stem}')
-        print(f"  Attack data will be saved to: {attack_save_dir}")
         skip_glmip = True
         skip_empirical = True
+        if artifacts_dir is None:
+            attack_save_dir = str(Path(output_path).parent / f'client_data_{Path(output_path).stem}')
+            print(f"  Attack data will be saved to: {attack_save_dir}")
+        else:
+            print(f"  Skipping client_data save — artifacts_dir already has attack data")
 
     remaining_rounds = config['num_rounds'] - start_round
     if remaining_rounds <= 0:

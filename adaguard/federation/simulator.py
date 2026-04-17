@@ -176,7 +176,12 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     # cosine_leak_score / empirical_* so that the label_avg/empirical_avg
     # computation below skips them rather than diluting the true risk with 0.0.
     # Compute-time / reconstruction placeholders are still set for logging.
-    deferred_attacks = save_dir is not None
+    #
+    # Deferred marker: trigger whenever either save_dir or artifacts_dir is
+    # provided (i.e., --defer-attacks was set on the CLI). Previously this
+    # checked only save_dir, which broke when we stopped writing the
+    # redundant client_data dir to stay under disk quota.
+    deferred_attacks = (save_dir is not None) or (artifacts_dir is not None)
     if deferred_attacks:
         # DEFERRED MODE: save data for later attack computation
         # (scores will be filled in by run_attacks.py on the saved artifacts)
@@ -188,18 +193,20 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['recon_psnr'] = 0.0
         metrics['recon_ssim'] = 0.0
 
-        # Save what the attacks need: gradient_dict, flat_gradient, images, outputs
-        client_save = {
-            'gradient_dict': {k: v.cpu() for k, v in gd.items()},
-            'flat_gradient': flat.cpu(),
-            'outputs': outputs.cpu(),
-        }
-        if original_images is not None:
-            client_save['original_images'] = original_images.cpu()
+        # Only write the separate client_data file when save_dir is set AND
+        # we don't have a slim artifacts_dir (which already holds attack data).
+        if save_dir is not None:
+            client_save = {
+                'gradient_dict': {k: v.cpu() for k, v in gd.items()},
+                'flat_gradient': flat.cpu(),
+                'outputs': outputs.cpu(),
+            }
+            if original_images is not None:
+                client_save['original_images'] = original_images.cpu()
 
-        import os
-        os.makedirs(save_dir, exist_ok=True)
-        torch.save(client_save, os.path.join(save_dir, f'client_{cid}.pt'))
+            import os
+            os.makedirs(save_dir, exist_ok=True)
+            torch.save(client_save, os.path.join(save_dir, f'client_{cid}.pt'))
         timing['glmip'] = 0.0
         timing['empirical'] = 0.0
     else:
