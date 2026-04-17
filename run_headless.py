@@ -220,8 +220,30 @@ def save_checkpoint(checkpoint_dir, rnd, sim, round_results, config, strategy,
     if torch.cuda.is_available():
         ckpt_data['rng_state_cuda'] = [torch.cuda.get_rng_state(i)
                                         for i in range(torch.cuda.device_count())]
-    # Atomic write: save to tmp then rename (avoids corrupt checkpoint on kill)
-    torch.save(ckpt_data, ckpt_tmp)
+    # Atomic write: save to tmp then rename (avoids corrupt checkpoint on kill).
+    # Retry on Lustre transient write failures — same pattern as _robust_save
+    # in simulator.py, duplicated here to avoid circular import.
+    _last_err = None
+    _delay = 2.0
+    for _attempt in range(4):
+        try:
+            torch.save(ckpt_data, ckpt_tmp)
+            break
+        except (RuntimeError, OSError) as _e:
+            _last_err = _e
+            try:
+                if ckpt_tmp.exists():
+                    ckpt_tmp.unlink()
+            except OSError:
+                pass
+            if _attempt < 3:
+                print(f"    [warn] checkpoint save failed (attempt "
+                      f"{_attempt+1}/4): {_e} — retrying in {_delay:.0f}s",
+                      flush=True)
+                time.sleep(_delay)
+                _delay *= 2
+    else:
+        raise _last_err
     ckpt_tmp.rename(ckpt_path)
 
 

@@ -44,6 +44,42 @@ _progress_lock = threading.Lock()
 _progress_count = 0
 _progress_total = 0
 
+
+def _robust_save(obj, path, max_attempts=4, initial_delay=2.0):
+    """torch.save with atomic tmp+rename and exponential-backoff retry.
+
+    Lustre (and other parallel filesystems) can transiently reject large
+    concurrent writes with
+        PytorchStreamWriter failed writing file data/N: file write failed
+    which leaves a corrupt half-written file at the target path. This
+    helper writes to ``{path}.tmp`` first, renames on success, and retries
+    up to ``max_attempts`` times with doubling backoff. Any corrupt tmp
+    from a failed attempt is deleted before the next retry.
+    """
+    tmp_path = str(path) + '.tmp'
+    delay = initial_delay
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            torch.save(obj, tmp_path)
+            os.replace(tmp_path, path)
+            return
+        except (RuntimeError, OSError) as e:
+            last_err = e
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            if attempt < max_attempts - 1:
+                print(f"    [warn] torch.save({path}) failed (attempt "
+                      f"{attempt+1}/{max_attempts}): {e} — retrying in "
+                      f"{delay:.0f}s", flush=True)
+                time.sleep(delay)
+                delay *= 2
+    # All retries exhausted — re-raise so caller's try/except can log
+    raise last_err
+
 # Worker ID pool: each thread grabs a worker ID from its GPU's pool
 _worker_ids = {}        # thread_id -> worker_id
 _gpu_worker_pools = {}  # gpu_str -> list of available worker IDs
@@ -206,7 +242,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
             import os
             os.makedirs(save_dir, exist_ok=True)
-            torch.save(client_save, os.path.join(save_dir, f'client_{cid}.pt'))
+            _robust_save(client_save, os.path.join(save_dir, f'client_{cid}.pt'))
         timing['glmip'] = 0.0
         timing['empirical'] = 0.0
     else:
@@ -426,7 +462,7 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
 
         import os
         os.makedirs(artifacts_dir, exist_ok=True)
-        torch.save(artifact, os.path.join(artifacts_dir, f'client_{cid}.pt'))
+        _robust_save(artifact, os.path.join(artifacts_dir, f'client_{cid}.pt'))
 
     return cid, metrics, weight_delta_cpu, fisher_r, mc_r, exposed_w_gpu, local_weights, local_state_cpu
 
@@ -577,7 +613,7 @@ class FederatedSimulator:
         if save_dir is not None:
             round_save_dir = os.path.join(save_dir, f'round_{rnd}')
             os.makedirs(round_save_dir, exist_ok=True)
-            torch.save(global_model_state, os.path.join(round_save_dir, 'global_model.pt'))
+            _robust_save(global_model_state, os.path.join(round_save_dir, 'global_model.pt'))
 
         # Per-round artifacts directory for Phase 2 scenario replay
         round_artifacts_dir = None
@@ -590,7 +626,7 @@ class FederatedSimulator:
                 round_artifacts_dir = os.path.join(artifacts_dir, f'round_{rnd}')
                 os.makedirs(round_artifacts_dir, exist_ok=True)
                 # Save global model state before this round
-                torch.save(global_model_state, os.path.join(round_artifacts_dir, 'global_model.pt'))
+                _robust_save(global_model_state, os.path.join(round_artifacts_dir, 'global_model.pt'))
                 # Save selected client IDs
                 import json
                 with open(os.path.join(round_artifacts_dir, 'selected_clients.json'), 'w') as f:
