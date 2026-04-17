@@ -59,11 +59,18 @@ mi_samples_per_class: 20
 fisher_topk: 50
 encryption_top_percent: 0.1
 
-# Artifact saving cadence — save every round.
-# Per-client artifact is now slim (~45 MB = gradient + labels + images).
-# 250 rounds × 30 clients × 45 MB = ~340 GB/experiment × 12 = ~4 TB total.
-# Comfortably under 10 TB project quota. See simulator._process_client.
-save_every_n_rounds: 1
+# Artifact saving cadence.
+# Per-client artifact (measured): ~86 MB after dropping fisher tensors
+# from metrics (slim fix in _process_client).
+#
+# Disk math at 500 clients / 50 per round / 250 rounds / save_every=2:
+#   125 saved rounds × 50 clients × 86 MB = 538 GB per experiment
+#   × 12 experiments = 6.5 TB total (fits 10 TB with 3.5 TB headroom).
+#
+# Odd/even rounds are highly correlated in FL, so dropping every other
+# round for the artifact stream doesn't hurt Phase 2 scenario coverage.
+# (Checkpoints + global_model still saved every round for resume.)
+save_every_n_rounds: 2
 
 # Focus layers
 focus_layers: ['fc.weight', 'fc.bias']
