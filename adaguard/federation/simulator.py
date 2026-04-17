@@ -399,11 +399,26 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     # Per-client size: ~290 MB → ~90 MB. Total for 250 rounds × 12
     # experiments ≈ 8 TB (fits under 10 TB quota).
     if artifacts_dir is not None:
+        # Strip large tensors from metrics before saving — they're derivable
+        # from gradient_dict in Phase 2 and would balloon each artifact by
+        # ~100 MB (measured: full metrics dict = 100.6 MB per client, of
+        # which ~99 MB is fisher_per_weight + fisher_per_weight_norm +
+        # encrypt_mask + param_names). Keep scalars, histograms, timings.
+        _METRICS_DROP = (
+            'fisher_per_weight',
+            'fisher_per_weight_norm',
+            'encrypt_mask',
+            'param_names',
+            'topk_fisher_values',
+            'topk_fisher_indices',
+        )
+        slim_metrics = {k: v for k, v in metrics.items() if k not in _METRICS_DROP}
+
         artifact = {
             'client_id': cid,
             'gradient_dict': {k: v.cpu() for k, v in gd.items()},
             'weight_delta': weight_delta_cpu,
-            'metrics': metrics.copy(),
+            'metrics': slim_metrics,
             'labels': result.get('labels', torch.tensor([])).cpu(),
         }
         if original_images is not None:
