@@ -27,12 +27,25 @@ from ..models import create_model
 from ..utils.reconstruction import compute_all_reconstruction_metrics
 
 
-def _resolve_scenario_config(scenario):
-    """Merge scenario config_overrides onto DEFAULT_CONFIG to get effective config."""
+def _resolve_scenario_config(scenario, training_config=None, attack_config=None):
+    """Build effective config by layering (in order, later wins):
+
+      1. DEFAULT_CONFIG                    — library defaults (smallcnn, 10 clients…)
+      2. training_config from metadata     — the real Phase-1 setup (resnet18, 300 clients…)
+      3. attack_config                     — attack hyperparameters from --config
+      4. scenario['config_overrides']      — the sensitivity/viability knobs
+
+    Without (2), Phase-2 scenarios rebuild a SmallCNN and crash trying to load
+    ResNet-18 checkpoints. Without (3), attack flags from --config are ignored.
+    Scenario overrides are last so the sensitivity sweep always wins.
+    """
     import copy
     effective = copy.deepcopy(DEFAULT_CONFIG)
-    overrides = scenario.get('config_overrides', {})
-    effective.update(overrides)
+    if training_config:
+        effective.update(training_config)
+    if attack_config:
+        effective.update(attack_config)
+    effective.update(scenario.get('config_overrides', {}))
     return effective
 
 
@@ -61,8 +74,12 @@ class ScenarioRunner:
 
         self.training_config = self.metadata['config']
 
-        # Resolve effective config: defaults + scenario overrides
-        self.config = _resolve_scenario_config(scenario_config)
+        # Resolve effective config: defaults + training + attack + scenario overrides
+        self.config = _resolve_scenario_config(
+            scenario_config,
+            training_config=self.training_config,
+            attack_config=self.attack_config,
+        )
 
         # Set up encryption for this scenario
         enc_type = self.config.get('encryption', 'fisher')
