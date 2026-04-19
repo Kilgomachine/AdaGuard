@@ -134,7 +134,7 @@ def _scenario_sort_key(sid):
 def run_scenario(scenario, args):
     """Run a single scenario and return results."""
     from adaguard.scenarios.runner import ScenarioRunner
-    from adaguard.config import load_config
+    import yaml
 
     sid = scenario['id']
     print(f"\n{'#' * 70}")
@@ -142,9 +142,14 @@ def run_scenario(scenario, args):
     print(f"  Overrides: {scenario.get('config_overrides', {})}")
     print(f"{'#' * 70}")
 
+    # Load just the yaml overrides — NOT DEFAULT_CONFIG + yaml, which is what
+    # adaguard.config.load_config returns. A merged DEFAULT_CONFIG would stomp
+    # the Phase-1 training config (model=resnet18 → smallcnn) when the runner
+    # layers attack_config on top of training_config.
     attack_config = {}
     if args.config:
-        attack_config = load_config(args.config)
+        with open(args.config) as f:
+            attack_config = yaml.safe_load(f) or {}
 
     # Initialize runner
     runner = ScenarioRunner(
