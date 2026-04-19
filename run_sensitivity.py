@@ -181,11 +181,21 @@ def run_scenario(scenario, args):
     # TB logger
     tb_logger = None
     if args.tb_dir:
-        from adaguard.logging_utils.logger import TBLogger
+        import sys as _sys
+        from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).resolve().parent))
+        from run_headless import TBLogger
         case = scenario.get('case', 'unknown')
         group = scenario.get('group', '')
         tb_subdir = f"{case}/{group}/{sid}"
-        tb_logger = TBLogger(os.path.join(args.tb_dir, tb_subdir))
+        overrides = scenario.get('config_overrides', {})
+        strategy_label = overrides.get('encryption', group or sid)
+        tb_logger = TBLogger(
+            os.path.join(args.tb_dir, tb_subdir),
+            runner.config,
+            strategy_label,
+            run_name=sid,
+        )
 
     # Run each round
     round_results = []
