@@ -54,7 +54,7 @@ styles.add(ParagraphStyle(
     borderColor=HexColor("#dcdde1"), borderPadding=8,
 ))
 styles.add(ParagraphStyle(
-    "Code", parent=styles["Normal"], fontSize=9, leading=12,
+    "CodeBlock", parent=styles["Normal"], fontSize=9, leading=12,
     fontName="Courier", alignment=TA_LEFT, spaceBefore=4, spaceAfter=4,
     backColor=HexColor("#f5f6fa"), borderWidth=1,
     borderColor=HexColor("#dcdde1"), borderPadding=6,
@@ -87,7 +87,7 @@ def section(text):
 def subsection(text): story.append(Paragraph(text, S["SubHead"]))
 def body(text): story.append(Paragraph(text, S["Body"]))
 def formula(text): story.append(Paragraph(text, S["Formula"]))
-def code(text): story.append(Paragraph(text, S["Code"]))
+def code(text): story.append(Paragraph(text, S["CodeBlock"]))
 def bullet(text): story.append(Paragraph(f"\u2022  {text}", S["BulletItem"]))
 def note(text): story.append(Paragraph(f"<b>Note.</b> {text}", S["Note"]))
 def gap(h=6): story.append(Spacer(1, h))
