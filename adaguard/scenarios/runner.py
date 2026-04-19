@@ -615,7 +615,23 @@ class ScenarioRunner:
                             guidance_rate=acfg.get('guidance_rate', 0.20),
                         )
 
-                    result = attack.attack(enc_gd_gpu, enc_flat)
+                    # Pass true batch size + labels + originals so the attack
+                    # reconstructs the full batch (not a single image) and the
+                    # metric call has matching shapes. Before this fix the attack
+                    # defaulted to batch_size=1 while originals had batch=4,
+                    # causing 'index 1 is out of bounds' in the metric loop.
+                    bs = (original_images.shape[0]
+                          if original_images is not None else 1)
+                    attack_labels = (labels.to(gpu_dev)
+                                     if labels is not None else None)
+                    attack_originals = (original_images.to(gpu_dev)
+                                        if original_images is not None else None)
+                    result = attack.attack(
+                        enc_gd_gpu, enc_flat,
+                        batch_size=bs,
+                        labels=attack_labels,
+                        original_images=attack_originals,
+                    )
                     recon_images = result.get('reconstructed_images')
 
                     # Compute reconstruction metrics
@@ -654,7 +670,9 @@ class ScenarioRunner:
                         torch.save(payload, _os.path.join(save_dir, f'{attack_name}.pt'))
 
                 except Exception as e:
+                    import traceback, sys
                     print(f"      {attack_name} failed: {e}")
+                    traceback.print_exc(file=sys.stderr)
                     client_attack_results[attack_name] = {'error': str(e)}
 
             attack_time = time.time() - t0
