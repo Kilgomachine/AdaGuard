@@ -133,55 +133,64 @@ class ScenarioRunner:
         return recompute
 
     def _recompute_entropy_metrics(self, art, global_state):
-        """Recompute entropy metrics with scenario's entropy_bins setting."""
-        from ..metrics.entropy_leakscore import (
-            ShannonEntropyMetric, RenyiEntropyMetric, MinEntropyMetric
-        )
+        """Recompute entropy leak scores with scenario's entropy_bins setting.
+
+        EntropyLeakScoreMetric computes Shannon, Renyi, and Min-entropy
+        together from a single flat gradient vector. flat_gradient was
+        dropped from slim artifacts (see simulator._METRICS_DROP), so we
+        rebuild it from gradient_dict on the fly.
+        """
+        from ..metrics.entropy_leakscore import EntropyLeakScoreMetric
         bins = self.config.get('entropy_bins', 50)
-        flat = art['flat_gradient']
+        focus_layers = self.config.get('focus_layers')
 
-        shannon = ShannonEntropyMetric(n_bins=bins).compute(flat)
-        renyi = RenyiEntropyMetric(n_bins=bins).compute(flat)
-        min_ent = MinEntropyMetric(n_bins=bins).compute(flat)
+        # Rebuild flat gradient from per-layer tensors (microseconds on CPU)
+        gd = art['gradient_dict']
+        flat = torch.cat([g.flatten() for g in gd.values()])
 
-        entropy_avg = np.mean([
-            shannon.get('shannon_score', 0.0),
-            renyi.get('renyi_score', 0.0),
-            min_ent.get('min_entropy_score', 0.0),
-        ])
+        metric = EntropyLeakScoreMetric(num_bins=bins)
+        result = metric.compute(
+            flat, gradient_dict=gd, focus_layers=focus_layers,
+        )
+
+        entropy_avg = float(np.mean([
+            result.get('shannon_leak_score', 0.0),
+            result.get('renyi_leak_score', 0.0),
+            result.get('min_entropy_leak_score', 0.0),
+        ]))
         return entropy_avg
 
     def _recompute_label_metrics(self, art, global_state):
-        """Recompute label metrics with scenario's focus_layers/samples settings."""
-        from ..metrics.label_leakscore import (
-            GLMIPMetric, ConfidenceGapMetric, CosineSimilarityMetric
-        )
-        focus_layers = self.config.get('focus_layers')
-        spc = self.config.get('mi_samples_per_class', 20)
-        num_classes = self.config.get('num_classes', 10)
+        """Recompute label leak scores for scenarios that override
+        focus_layers or mi_samples_per_class.
 
-        scores = []
+        Caveat: slim Phase-1 artifacts don't carry per-client `outputs`
+        or per-class mean gradients. ConfidenceGap needs logits; GLMIP
+        needs model + labelled samples; CosineSimilarity needs class means.
+        None of these can be faithfully rebuilt from a single client's
+        gradient_dict alone. For S9 (samples_per_class) and S11
+        (focus_layers), we fall back to the training-time label_avg
+        and print a one-time warning so the downstream CSV isn't silently
+        misinterpreted as a real sweep.
+        """
+        saved = art.get('metrics', {})
+        if not getattr(self, '_label_recompute_warned', False):
+            print(
+                "  [warn] label recompute unavailable with slim artifacts; "
+                "reusing training-time label_avg. S9/S11 sweeps will show "
+                "flat values — this is a known Phase-1 artifact limitation."
+            )
+            self._label_recompute_warned = True
 
-        # ConfidenceGap uses saved outputs + labels (no model needed)
-        outputs = art.get('outputs')
-        labels = art.get('labels')
-        if outputs is not None:
-            cg = ConfidenceGapMetric()
-            cg_result = cg.compute(outputs, labels=labels)
-            scores.append(cg_result.get('confidence_gap', 0.0))
-
-        # CosineSimilarity uses saved gradient
-        gd = art['gradient_dict']
-        cos_metric = CosineSimilarityMetric()
-        cos_result = cos_metric.compute(gd, focus_layers=focus_layers)
-        scores.append(cos_result.get('cosine_similarity_score', 0.0))
-
-        # GLMIP requires model + dataset — skip if not available on CPU
-        # (it's expensive; use saved value as fallback)
-        saved_glmip = art.get('metrics', {}).get('glmip_score', 0.0)
-        scores.append(saved_glmip)
-
-        return float(np.mean(scores)) if scores else 0.0
+        # Prefer the aggregated label_avg if present, else average components.
+        if 'label_avg' in saved:
+            return float(saved['label_avg'])
+        components = [
+            float(saved.get('confidence_gap', 0.0)),
+            float(saved.get('cosine_leak_score', 0.0)),
+            float(saved.get('glmip_score', 0.0)),
+        ]
+        return float(np.mean(components))
 
     def get_saved_rounds(self):
         """Return sorted list of round indices that have saved artifacts."""
