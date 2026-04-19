@@ -486,7 +486,8 @@ class ScenarioRunner:
         if run_attacks:
             print(f"  Running full attacks...")
             attack_results = self._run_full_attacks(
-                client_artifacts, protected_gradients, global_state, selected_clients
+                client_artifacts, protected_gradients, global_state, selected_clients,
+                rnd=rnd,
             )
             round_metrics['attacks'] = attack_results
 
@@ -524,10 +525,12 @@ class ScenarioRunner:
         result = emp_metric.compute(gd, flat, original_images=images)
         return result.get('empirical_mean', 0.0)
 
-    def _run_full_attacks(self, client_artifacts, protected_gradients, global_state, selected_clients):
+    def _run_full_attacks(self, client_artifacts, protected_gradients, global_state, selected_clients, rnd=None):
         """Run full paper-matched attacks on encrypted gradients.
 
-        Distributes attacks across available GPUs.
+        Distributes attacks across available GPUs. If self.reconstructions_dir
+        is set, saves each attack's reconstructed image tensor alongside the
+        ground-truth image so paper figures can show side-by-side comparisons.
         """
         from ..attacks.grad_inversion import GradInversionFull
         from ..attacks.gi_nas import GINASFull
@@ -626,6 +629,29 @@ class ScenarioRunner:
                         )
                     metrics['gradient_score'] = result.get('score', 0.0)
                     client_attack_results[attack_name] = metrics
+
+                    # Persist reconstructed + original images for paper figures.
+                    # Tiny — ResNet-18/CIFAR-10 gives ~12 KB/image, so the full
+                    # sweep (72 scenarios x 5 rounds x 5 clients x 3 attacks)
+                    # totals under 30 MB.
+                    rdir = getattr(self, 'reconstructions_dir', None)
+                    if rdir is not None and recon_images is not None:
+                        import os as _os
+                        save_dir = _os.path.join(
+                            str(rdir), f'round_{rnd}', f'client_{cid}',
+                        )
+                        _os.makedirs(save_dir, exist_ok=True)
+                        payload = {
+                            'reconstructed': recon_images.detach().cpu(),
+                            'original': (original_images.detach().cpu()
+                                         if original_images is not None else None),
+                            'labels': (labels.detach().cpu()
+                                       if labels is not None else None),
+                            'metrics': {k: (float(v) if isinstance(v, (int, float)) else v)
+                                        for k, v in metrics.items()},
+                            'attack': attack_name,
+                        }
+                        torch.save(payload, _os.path.join(save_dir, f'{attack_name}.pt'))
 
                 except Exception as e:
                     print(f"      {attack_name} failed: {e}")

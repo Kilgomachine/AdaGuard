@@ -158,6 +158,11 @@ def run_scenario(scenario, args):
         attack_config=attack_config,
     )
 
+    # Tell the runner where to dump reconstructed images for paper figures.
+    # Saves <output_dir>/reconstructions/<scenario_id>/round_<r>/client_<cid>/<attack>.pt
+    # with {reconstructed, original, labels, metrics, attack}. ~30 MB total sweep-wide.
+    runner.reconstructions_dir = Path(args.output_dir) / 'reconstructions' / sid
+
     # Determine which rounds to evaluate
     available_rounds = runner.get_saved_rounds()
     if args.rounds:
