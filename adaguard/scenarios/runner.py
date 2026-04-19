@@ -376,11 +376,12 @@ class ScenarioRunner:
 
             # Apply encryption
             gd_cpu = art['gradient_dict']
-            # fisher_result was dropped from slim artifacts — recompute as g^2
-            # (Fisher information diagonal ≈ E[grad^2] per parameter)
+            # fisher_result was dropped from slim artifacts. The encryptor
+            # expects a full result dict (encrypt_mask, weights_to_encrypt,
+            # pct_encrypted, encryption_threshold) — not raw g^2 tensors —
+            # so when it's missing we let the encryptor recompute it fresh
+            # via its FisherInformationMetric (see fisher_encrypt.py:38-46).
             fisher_r = art.get('fisher_result')
-            if not fisher_r:
-                fisher_r = {k: (v * v) for k, v in gd_cpu.items()}
             total_params = sum(g.numel() for g in gd_cpu.values())
 
             if enc_type == 'none':
@@ -413,8 +414,15 @@ class ScenarioRunner:
                     protected_gd = gd_cpu
                     pct_encrypted = 0.0
                 else:
-                    fisher_r_cpu = {k_: (v.cpu() if isinstance(v, torch.Tensor) else v)
-                                    for k_, v in fisher_r.items()}
+                    # Pass fisher_result through only if we actually have a
+                    # well-formed one from Phase 1; otherwise let the encryptor
+                    # recompute. fisher_r may be a raw Fisher dict (legacy) or
+                    # the proper result dict with encrypt_mask.
+                    if fisher_r and 'encrypt_mask' in fisher_r:
+                        fisher_r_cpu = {k_: (v.cpu() if isinstance(v, torch.Tensor) else v)
+                                        for k_, v in fisher_r.items()}
+                    else:
+                        fisher_r_cpu = None
                     protected_gd, enc_meta = self.fisher_encryptor.encrypt(
                         gd_cpu, k=k, fisher_result=fisher_r_cpu,
                     )
