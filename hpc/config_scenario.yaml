@@ -17,5 +17,7 @@ attack_ginas_restarts: 8
 attack_ggcdm_diffusion_steps: 1000
 attack_ggcdm_guidance_rate: 0.20
 
-# How many clients to attack per round (attacks are expensive)
-max_attack_clients: 5
+# How many clients to attack per round (attacks are expensive).
+# 3 clients x 5 rounds = 15 samples per scenario — enough for stable LPIPS/SSIM
+# averages, and matches the 10% participation ratio (3 of 30 clients/round).
+max_attack_clients: 3
