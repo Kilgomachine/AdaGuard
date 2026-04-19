@@ -85,11 +85,16 @@ for i, rho in enumerate([0.01, 0.05, 0.10, 0.20, 0.25], 1):
         },
     }
 
-# S11. Focus Layers for GLMIP
+# S11. Focus Layers for GLMIP (ResNet-18 layer names)
+# The old fc1/fc2 values were leftover from a smallcnn baseline and don't
+# exist in ResNet-18 — would silently match 0 params and give garbage.
+#   S11.1: None       — all layers, broad/noisy label signal
+#   S11.2: fc.*       — final classifier (iDLG-style), strongest per-theory
+#   S11.3: layer4.1.* — last residual block, tests mid-layer leak
 _focus_layer_values = [
     ('all', None),
-    ('final_fc', ['fc2.weight', 'fc2.bias']),
-    ('penultimate_fc', ['fc1.weight', 'fc1.bias']),
+    ('final_fc', ['fc.weight', 'fc.bias']),
+    ('penultimate_conv', ['layer4.1.conv2.weight']),
 ]
 for i, (label, layers) in enumerate(_focus_layer_values, 1):
     sid = f"S11.{i}"

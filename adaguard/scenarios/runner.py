@@ -161,36 +161,104 @@ class ScenarioRunner:
         return entropy_avg
 
     def _recompute_label_metrics(self, art, global_state):
-        """Recompute label leak scores for scenarios that override
-        focus_layers or mi_samples_per_class.
+        """Recompute label leak scores server-side using the global model
+        at this round + a class-balanced sample from the public dataset.
 
-        Caveat: slim Phase-1 artifacts don't carry per-client `outputs`
-        or per-class mean gradients. ConfidenceGap needs logits; GLMIP
-        needs model + labelled samples; CosineSimilarity needs class means.
-        None of these can be faithfully rebuilt from a single client's
-        gradient_dict alone. For S9 (samples_per_class) and S11
-        (focus_layers), we fall back to the training-time label_avg
-        and print a one-time warning so the downstream CSV isn't silently
-        misinterpreted as a real sweep.
+        This mirrors Phase 1's GLMIP pipeline: slim artifacts dropped
+        per-client `outputs` and per-class mean gradients, but both can
+        be reconstructed faithfully by replaying inference against the
+        checkpoint. Enables S9 (mi_samples_per_class) and S11
+        (focus_layers) as genuine sensitivity sweeps.
+
+        Cost: ~20-60s/round for GLMIP's per-sample backward passes on a
+        V100. Called only for scenarios whose overrides change
+        focus_layers or mi_samples_per_class (see _determine_recompute).
         """
-        saved = art.get('metrics', {})
-        if not getattr(self, '_label_recompute_warned', False):
-            print(
-                "  [warn] label recompute unavailable with slim artifacts; "
-                "reusing training-time label_avg. S9/S11 sweeps will show "
-                "flat values — this is a known Phase-1 artifact limitation."
-            )
-            self._label_recompute_warned = True
+        from ..metrics.label_leakscore import (
+            GLMIPMetric, ConfidenceGapMetric, CosineSimilarityMetric,
+        )
+        from ..models import create_model
+        from ..data.cifar10 import load_cifar10
+        import os as _os
+        import random as _random
+        from collections import defaultdict as _defaultdict
 
-        # Prefer the aggregated label_avg if present, else average components.
-        if 'label_avg' in saved:
-            return float(saved['label_avg'])
-        components = [
-            float(saved.get('confidence_gap', 0.0)),
-            float(saved.get('cosine_leak_score', 0.0)),
-            float(saved.get('glmip_score', 0.0)),
-        ]
-        return float(np.mean(components))
+        # Cache dataset on the runner instance — reloading CIFAR-10 per
+        # round would dominate the recompute cost.
+        if not hasattr(self, '_recompute_dataset'):
+            data_root = _os.environ.get('DATA_DIR', './data')
+            print(
+                f"  [recompute] Loading CIFAR-10 from {data_root} "
+                f"for label-metric replay"
+            )
+            train_ds, _ = load_cifar10(data_root=data_root)
+            self._recompute_dataset = train_ds
+
+        ds = self._recompute_dataset
+
+        # Rebuild the global model with this round's weights
+        model = create_model(
+            self.config.get('model', 'resnet18'),
+            num_classes=self.config.get('num_classes', 10),
+        ).to(self.device)
+        model.load_state_dict(
+            {k: v.to(self.device) for k, v in global_state.items()}
+        )
+
+        criterion = torch.nn.CrossEntropyLoss()
+        focus_layers = self.config.get('focus_layers')
+        spc = self.config.get('mi_samples_per_class', 20)
+        num_classes = self.config.get('num_classes', 10)
+
+        # GLMIP does class-balanced sampling + per-sample backward passes
+        # internally; returns both the score and the per-class mean
+        # gradients that CosineSimilarity needs.
+        glmip = GLMIPMetric()
+        glmip_result = glmip.compute(
+            model, ds, self.device, criterion,
+            num_classes=num_classes,
+            samples_per_class=spc,
+            focus_layers=focus_layers,
+        )
+        class_means = glmip_result.get('class_means', {})
+
+        # CosineSimilarity over reconstructed class means
+        cos_result = CosineSimilarityMetric().compute(class_means)
+
+        # ConfidenceGap needs logits from a balanced batch — cheap forward pass
+        cg_score = 0.0
+        targets = getattr(ds, 'targets', None)
+        if targets is not None:
+            if isinstance(targets, torch.Tensor):
+                targets = targets.tolist()
+            label_idx = _defaultdict(list)
+            for i, lbl in enumerate(targets):
+                label_idx[int(lbl)].append(i)
+
+            sampled_ids, sampled_lbls = [], []
+            for c in range(num_classes):
+                ids = label_idx.get(c, [])
+                if not ids:
+                    continue
+                picks = _random.sample(ids, min(8, len(ids)))
+                sampled_ids.extend(picks)
+                sampled_lbls.extend([c] * len(picks))
+
+            if sampled_ids:
+                imgs = torch.stack([ds[i][0] for i in sampled_ids]).to(self.device)
+                lbls = torch.tensor(sampled_lbls, dtype=torch.long, device=self.device)
+                model.eval()
+                with torch.no_grad():
+                    logits = model(imgs)
+                cg_score = ConfidenceGapMetric().compute(
+                    logits, labels=lbls,
+                ).get('confidence_gap', 0.0)
+
+        return float(np.mean([
+            glmip_result.get('glmip_score', 0.0),
+            cos_result.get('cosine_leak_score', 0.0),
+            cg_score,
+        ]))
 
     def get_saved_rounds(self):
         """Return sorted list of round indices that have saved artifacts."""
