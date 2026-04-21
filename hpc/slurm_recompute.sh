@@ -3,9 +3,10 @@
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/recompute-%j.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/recompute-%j.err
 #SBATCH --partition=general-long
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
-#SBATCH --time=4:00:00
+#SBATCH --time=8:00:00
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=maguir@oakland.edu
 # =============================================================
@@ -41,7 +42,7 @@ echo "Results dir: $RESULTS_DIR"
 echo "Output:      $OUTPUT"
 
 cd /projects/secure-distributed-ml/AdaGuard
-python recompute_metrics.py \
+stdbuf -oL -eL python -u recompute_metrics.py \
     --results-dir "$RESULTS_DIR" \
     --output "$OUTPUT"
 

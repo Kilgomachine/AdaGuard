@@ -27,11 +27,15 @@ import torch
 from adaguard.utils.reconstruction import (
     compute_mse, compute_psnr, compute_ssim, compute_asr,
     compute_cosine_similarity_images, compute_avd, compute_ddcs,
-    compute_knn_distance, compute_fid,
+    compute_knn_distance,
 )
 
 CIFAR_MEAN = torch.tensor([0.4914, 0.4822, 0.4465]).view(1, 3, 1, 1)
 CIFAR_STD = torch.tensor([0.2470, 0.2435, 0.2616]).view(1, 3, 1, 1)
+
+# Device picked once at module load. LPIPS and tensors ride the GPU
+# if available; denorm/MSE/PSNR/SSIM/etc run on CPU via numpy.
+_DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Module-level LPIPS model cache. Building AlexNet is ~200 MB and ~1s; doing
 # it per-file is what OOM'd the login node. Build once, reuse everywhere.
@@ -45,12 +49,12 @@ def get_lpips_model():
         return _LPIPS_MODEL
     try:
         import lpips
-        _LPIPS_MODEL = lpips.LPIPS(net='alex', verbose=False).eval()
+        _LPIPS_MODEL = lpips.LPIPS(net='alex', verbose=False).eval().to(_DEVICE)
         for p in _LPIPS_MODEL.parameters():
             p.requires_grad_(False)
-        print("[lpips] AlexNet model loaded once; will be reused.")
+        print(f"[lpips] AlexNet loaded once on {_DEVICE}; will be reused.", flush=True)
     except Exception as e:
-        print(f"[lpips] unavailable — LPIPS will be reported as NaN: {e}")
+        print(f"[lpips] unavailable — LPIPS will be reported as NaN: {e}", flush=True)
         _LPIPS_MODEL = False
     return _LPIPS_MODEL
 
@@ -61,7 +65,9 @@ def compute_lpips_cached(orig_01, recon_01):
     if not model:
         return float('nan')
     with torch.no_grad():
-        d = model(orig_01 * 2 - 1, recon_01 * 2 - 1)
+        o = (orig_01 * 2 - 1).to(_DEVICE)
+        r = (recon_01 * 2 - 1).to(_DEVICE)
+        d = model(o, r)
     return float(d.mean().item())
 
 
@@ -73,7 +79,14 @@ def denormalize(x):
 
 
 def compute_metrics(orig_01, recon_01, labels=None):
-    """All reconstruction metrics with both inputs already in [0,1]."""
+    """All reconstruction metrics with both inputs already in [0,1].
+
+    Note: FID is intentionally not computed per-file. It requires pooled
+    distributions (not batch-of-16 samples), and its per-file cost via
+    np.linalg.eigvals on a 3072x3072 covariance matrix dominated the
+    runtime of the first batch job (TIMEOUT at 4h). FID should be computed
+    once per scenario downstream if needed.
+    """
     m = {}
     m['mse'] = compute_mse(orig_01, recon_01)
     m['psnr'] = compute_psnr(orig_01, recon_01)
@@ -84,10 +97,9 @@ def compute_metrics(orig_01, recon_01, labels=None):
     m['ddcs'] = compute_ddcs(orig_01, recon_01)
     if orig_01.ndim == 4:
         m['knn_distance'] = compute_knn_distance(orig_01, recon_01)
-        m['fid'] = compute_fid(orig_01, recon_01) if orig_01.shape[0] >= 2 else 0.0
     else:
         m['knn_distance'] = 0.0
-        m['fid'] = 0.0
+    m['fid'] = None  # deferred to per-scenario aggregation
     m['lpips'] = compute_lpips_cached(orig_01, recon_01)
     return m
 
@@ -159,7 +171,8 @@ def main():
         raise SystemExit(f"No reconstructions/ under {args.results_dir}")
 
     pt_files = sorted(root.glob('*/round_*/client_*/*.pt'))
-    print(f"Found {len(pt_files)} .pt files under {root}")
+    print(f"Found {len(pt_files)} .pt files under {root}", flush=True)
+    print(f"Device: {_DEVICE}", flush=True)
 
     # Warm up LPIPS model once so we fail fast if it's broken.
     get_lpips_model()
@@ -184,7 +197,8 @@ def main():
 
         if (i + 1) % args.progress_every == 0:
             print(f"  [{i+1}/{len(pt_files)}]  {scenario}/{round_key}/{client_key}/{attack}  "
-                  f"psnr={metrics['psnr']:.2f} lpips={metrics['lpips']:.3f}")
+                  f"psnr={metrics['psnr']:.2f} lpips={metrics['lpips']:.3f}",
+                  flush=True)
             gc.collect()
 
     out = {}
