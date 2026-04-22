@@ -8,3 +8,7 @@ pyyaml
 streamlit
 plotly
 scipy
+lpips
+diffusers
+huggingface_hub
+accelerate

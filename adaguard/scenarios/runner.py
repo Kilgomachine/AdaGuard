@@ -533,8 +533,15 @@ class ScenarioRunner:
         ground-truth image so paper figures can show side-by-side comparisons.
         """
         from ..attacks.grad_inversion import GradInversionFull
-        from ..attacks.gi_nas import GINASFull
-        from ..attacks.ggcdm import GGCDMFull
+        from ..attacks.gi_nas import GINASFull, GINASPaper
+        from ..attacks.ggcdm import GGCDMFull, GGCDMPaper
+
+        # Attack variant: 'paper' (default, post-2026-04-21 paper-faithful
+        # implementations) or 'full' (pre-fix heuristics, kept for repro).
+        attack_variant = str(
+            self.attack_config.get('attack_variant', 'paper')
+        ).lower()
+        use_paper = attack_variant == 'paper'
 
         attack_configs = {
             'gradinversion': {
@@ -543,15 +550,34 @@ class ScenarioRunner:
                 'tv_lambda': self.attack_config.get('attack_gi_tv_lambda', 1e-4),
                 'l2_lambda': self.attack_config.get('attack_gi_l2_lambda', 1e-6),
                 'bn_lambda': self.attack_config.get('attack_gi_bn_lambda', 0.1),
+                'n_candidates': self.attack_config.get('attack_gi_candidates', 1),
+                'warmup_iters': self.attack_config.get('attack_gi_warmup', 50 if use_paper else 0),
+                'langevin_sigma': self.attack_config.get(
+                    'attack_gi_langevin', 1e-3 if use_paper else 0.0,
+                ),
             },
             'gi_nas': {
-                'n_iter': self.attack_config.get('attack_ginas_iters', 500),
+                'n_iter': self.attack_config.get(
+                    'attack_ginas_iters', 2000 if use_paper else 500,
+                ),
                 'lr': self.attack_config.get('attack_ginas_lr', 1e-3),
                 'n_restarts': self.attack_config.get('attack_ginas_restarts', 8),
+                'n_candidates': self.attack_config.get('attack_ginas_candidates', 5),
+                'warmup_iters': self.attack_config.get('attack_ginas_warmup', 100),
             },
             'ggcdm': {
-                'n_iter': self.attack_config.get('attack_ggcdm_diffusion_steps', 1000),
-                'guidance_rate': self.attack_config.get('attack_ggcdm_guidance_rate', 0.20),
+                # DDIM needs far fewer steps than DDPM — 100 is a sensible
+                # default; raise via config if PSNR stalls.
+                'n_iter': self.attack_config.get(
+                    'attack_ggcdm_diffusion_steps', 100 if use_paper else 1000,
+                ),
+                'guidance_rate': self.attack_config.get(
+                    'attack_ggcdm_guidance_rate', 0.5 if use_paper else 0.20,
+                ),
+                'guidance_scale': self.attack_config.get('attack_ggcdm_guidance_scale', 1.0),
+                'diffusion_model': self.attack_config.get(
+                    'attack_ggcdm_model', 'google/ddpm-cifar10-32',
+                ),
             },
         }
 
@@ -593,6 +619,8 @@ class ScenarioRunner:
             for attack_name, acfg in attack_configs.items():
                 try:
                     if attack_name == 'gradinversion':
+                        # GradInversionFull is the single class — use_paper
+                        # flag only changes the recipe (warmup + Langevin on).
                         attack = GradInversionFull(
                             model, criterion, gpu_dev,
                             n_iter=acfg['n_iter'],
@@ -600,20 +628,43 @@ class ScenarioRunner:
                             tv_lambda=acfg.get('tv_lambda', 1e-4),
                             l2_lambda=acfg.get('l2_lambda', 1e-6),
                             bn_lambda=acfg.get('bn_lambda', 0.1),
+                            n_candidates=acfg.get('n_candidates', 1),
+                            warmup_iters=acfg.get('warmup_iters', 50),
+                            langevin_sigma=acfg.get('langevin_sigma', 1e-3),
                         )
                     elif attack_name == 'gi_nas':
-                        attack = GINASFull(
-                            model, criterion, gpu_dev,
-                            n_iter=acfg['n_iter'],
-                            lr=acfg['lr'],
-                            n_restarts=acfg.get('n_restarts', 8),
-                        )
+                        if use_paper:
+                            attack = GINASPaper(
+                                model, criterion, gpu_dev,
+                                n_iter=acfg['n_iter'],
+                                lr=acfg['lr'],
+                                n_candidates=acfg.get('n_candidates', 5),
+                                warmup_iters=acfg.get('warmup_iters', 100),
+                            )
+                        else:
+                            attack = GINASFull(
+                                model, criterion, gpu_dev,
+                                n_iter=acfg['n_iter'],
+                                lr=acfg['lr'],
+                                n_restarts=acfg.get('n_restarts', 8),
+                            )
                     else:  # ggcdm
-                        attack = GGCDMFull(
-                            model, criterion, gpu_dev,
-                            n_iter=acfg['n_iter'],
-                            guidance_rate=acfg.get('guidance_rate', 0.20),
-                        )
+                        if use_paper:
+                            attack = GGCDMPaper(
+                                model, criterion, gpu_dev,
+                                n_iter=acfg['n_iter'],
+                                guidance_rate=acfg.get('guidance_rate', 0.5),
+                                guidance_scale=acfg.get('guidance_scale', 1.0),
+                                diffusion_model_name=acfg.get(
+                                    'diffusion_model', 'google/ddpm-cifar10-32',
+                                ),
+                            )
+                        else:
+                            attack = GGCDMFull(
+                                model, criterion, gpu_dev,
+                                n_iter=acfg['n_iter'],
+                                guidance_rate=acfg.get('guidance_rate', 0.20),
+                            )
 
                     # Pass true batch size + labels + originals so the attack
                     # reconstructs the full batch (not a single image) and the
