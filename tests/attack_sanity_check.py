@@ -170,10 +170,18 @@ def _check_artifact_consistency(model, global_state_gpu, weight_delta,
       * mean relative diff  <= 1e-4   (float32 round-off territory)
       * max  relative diff  <= 1e-3   (per-layer tolerance)
 
-    Large diffs mean the Phase-1 simulator saved a gradient that does
-    not correspond to the saved (images, labels, weight_delta) triple —
-    i.e., the artifact is internally inconsistent and any B != saved_B
-    recompute is attacking a phantom.
+    The client (adaguard/federation/client.py:121-131) computes the
+    saved raw_gradient_dict in local_model.train() mode — BN uses batch
+    statistics over last_images. If we check in .eval() mode, BN uses
+    running_mean/var from the *global* state (weight_delta is
+    params-only, so BN buffers are not reconstructed), which makes
+    BN-param gradients diverge wildly. We must match the client's
+    .train() mode to get a faithful comparison.
+
+    Large diffs even in .train() mean the Phase-1 simulator saved a
+    gradient that does not correspond to the saved (images, labels,
+    weight_delta) triple — i.e., the artifact is internally
+    inconsistent and any B != saved_B recompute is attacking a phantom.
     """
     if weight_delta is None:
         return None
@@ -184,7 +192,9 @@ def _check_artifact_consistency(model, global_state_gpu, weight_delta,
         for k in global_state_gpu
     }
     model.load_state_dict(local_state)
-    model.eval()
+    # Match client protocol: BN must use batch stats of last_images, not
+    # running stats (which aren't reconstructed by global - weight_delta).
+    model.train()
     recomputed = _recompute_gradient(model, images, labels, criterion, device)
 
     per_layer = {}
