@@ -89,8 +89,53 @@ def _denormalize(x):
     return (x * std + mean).clamp(0, 1)
 
 
-def _load_artifact(artifact_dir: Path, rnd: int, client_id=None):
-    """Load one client's gradient_dict + original images + labels."""
+def _scan_clients_for_diversity(round_dir: Path):
+    """Return list of (filename, labels_list, n_unique) for each client."""
+    out = []
+    for fname in sorted(os.listdir(round_dir)):
+        if not (fname.startswith('client_') and fname.endswith('.pt')):
+            continue
+        try:
+            art = torch.load(round_dir / fname, map_location='cpu',
+                             weights_only=False)
+        except Exception:
+            continue
+        lbls = art.get('labels')
+        if lbls is None:
+            continue
+        lbls_list = lbls.tolist()
+        n_uniq = len(set(lbls_list))
+        out.append((fname, lbls_list, n_uniq))
+    return out
+
+
+def _pick_label_diverse_subset(labels, k):
+    """Return sorted list of k indices maximizing unique-label count.
+
+    Greedy: take one representative per class in first-appearance order,
+    then fill remaining slots with earliest unused indices. Deterministic.
+    """
+    labels_list = labels.tolist() if hasattr(labels, 'tolist') else list(labels)
+    first_seen = {}
+    for i, l in enumerate(labels_list):
+        if l not in first_seen:
+            first_seen[l] = i
+    picks = sorted(first_seen.values())[:k]
+    if len(picks) < k:
+        chosen = set(picks)
+        remaining = [i for i in range(len(labels_list)) if i not in chosen]
+        picks = sorted(picks + remaining[: k - len(picks)])
+    return picks
+
+
+def _load_artifact(artifact_dir: Path, rnd: int, client_id=None,
+                   auto_pick_min_unique=None):
+    """Load one client's gradient_dict + original images + labels.
+
+    If auto_pick_min_unique is set, scans clients in the round and picks
+    the first whose saved label batch has >= that many unique classes.
+    Falls back to the single most-diverse client if none meet the bar.
+    """
     round_dir = artifact_dir / f'round_{rnd}'
     if not round_dir.exists():
         raise FileNotFoundError(f"No round dir at {round_dir}")
@@ -110,6 +155,19 @@ def _load_artifact(artifact_dir: Path, rnd: int, client_id=None):
         if fname not in clients:
             raise FileNotFoundError(f"{fname} not in {round_dir}")
         pick = fname
+    elif auto_pick_min_unique is not None:
+        scan = _scan_clients_for_diversity(round_dir)
+        good = [(f, l, n) for f, l, n in scan if n >= auto_pick_min_unique]
+        if good:
+            pick = good[0][0]
+            print(f"[auto-pick] {pick} has {good[0][2]} unique labels "
+                  f"(first match for min={auto_pick_min_unique})")
+        else:
+            scan_sorted = sorted(scan, key=lambda t: -t[2])
+            pick = scan_sorted[0][0]
+            print(f"[auto-pick] no client with >= {auto_pick_min_unique} "
+                  f"unique labels; falling back to most diverse: {pick} "
+                  f"({scan_sorted[0][2]} unique)")
     else:
         pick = clients[0]
 
@@ -329,6 +387,21 @@ def main():
                          'the saved local model (global - weight_delta). '
                          'Use to reproduce paper-matched protocols: '
                          'GI-NAS B=4, GradInversion B=1/8, GGCDM B=1.')
+    ap.add_argument('--diverse-subset', action='store_true',
+                    help='With --batch-size N, pick the N samples that '
+                         'maximize unique-label count instead of the first '
+                         'N. Use to isolate batch-averaging effects from '
+                         'label-collinearity effects on non-IID clients.')
+    ap.add_argument('--auto-pick-diverse', type=int, default=None,
+                    metavar='N',
+                    help='Scan all clients in the round and pick the first '
+                         'whose label batch has >= N unique classes. '
+                         'Falls back to the most-diverse client if none '
+                         'meets the bar. Overrides --client-id.')
+    ap.add_argument('--list-clients', action='store_true',
+                    help='Print per-client unique-label counts for the '
+                         'round and exit. Use before --auto-pick-diverse '
+                         'to see what is available.')
     ap.add_argument('--check-consistency', action='store_true',
                     help='Before running the attack, reconstruct the local '
                          'model (global - weight_delta), recompute the '
@@ -348,8 +421,22 @@ def main():
         print(f"GPU:    {torch.cuda.get_device_name(0)}")
 
     art_dir = Path(args.artifact_dir)
+
+    if args.list_clients:
+        round_dir = art_dir / f'round_{args.round}'
+        scan = _scan_clients_for_diversity(round_dir)
+        scan_sorted = sorted(scan, key=lambda t: (-t[2], t[0]))
+        print(f"\nClients in round {args.round} (most diverse first):")
+        print(f"{'client':20s}  {'n_unique':>9s}  labels")
+        for fname, lbls, n in scan_sorted:
+            print(f"{fname:20s}  {n:9d}  {lbls}")
+        return
+
     print(f"\nLoading artifact from {art_dir} round {args.round}...")
-    data = _load_artifact(art_dir, args.round, args.client_id)
+    data = _load_artifact(
+        art_dir, args.round, args.client_id,
+        auto_pick_min_unique=args.auto_pick_diverse,
+    )
     print(f"  client: {data['client_file']}")
 
     orig = data['originals']
@@ -452,13 +539,28 @@ def main():
             }
             model.load_state_dict(local_state)
             model.eval()
-            orig = orig[: args.batch_size]
-            labels = labels[: args.batch_size]
-            print(
-                f"\n[batch-size override] saved B={saved_bs} -> "
-                f"using first {args.batch_size} samples; "
-                f"recomputing gradient against local model."
-            )
+
+            if args.diverse_subset:
+                picks = _pick_label_diverse_subset(labels, args.batch_size)
+                idx_t = torch.tensor(picks, dtype=torch.long)
+                orig = orig.index_select(0, idx_t)
+                labels = labels.index_select(0, idx_t)
+                print(
+                    f"\n[batch-size override] saved B={saved_bs} -> "
+                    f"diverse-subset picks {picks} -> labels {labels.tolist()} "
+                    f"({len(set(labels.tolist()))} unique); recomputing "
+                    f"gradient against local model."
+                )
+            else:
+                orig = orig[: args.batch_size]
+                labels = labels[: args.batch_size]
+                print(
+                    f"\n[batch-size override] saved B={saved_bs} -> "
+                    f"using first {args.batch_size} samples "
+                    f"(labels {labels.tolist()}, "
+                    f"{len(set(labels.tolist()))} unique); "
+                    f"recomputing gradient against local model."
+                )
             gd = _recompute_gradient(model, orig, labels, criterion, device)
             # Put model back into eval so the attack's forward pass is
             # deterministic w.r.t. BN.
