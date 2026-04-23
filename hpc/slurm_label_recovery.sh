@@ -2,7 +2,7 @@
 #SBATCH --job-name=adaguard-llg
 #SBATCH --output=/scratch/projects/secure-distributed-ml/logs/llg-%j.out
 #SBATCH --error=/scratch/projects/secure-distributed-ml/logs/llg-%j.err
-#SBATCH --partition=general
+#SBATCH --partition=general-long
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --time=0:30:00
