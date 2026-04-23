@@ -255,7 +255,7 @@ class GGCDMPaper:
     """
 
     def __init__(self, model, criterion, device, n_iter=100,
-                 guidance_rate=0.5, guidance_scale=1.0,
+                 guidance_rate=0.20, guidance_scale=1.0,
                  diffusion_model_name='google/ddpm-cifar10-32',
                  focus_layers=None):
         self.model = model
@@ -374,11 +374,15 @@ class GGCDMPaper:
 
             grad_xt, = torch.autograd.grad(loss_grad, x_t_g)
 
-            # Adaptive norm scaling so the guidance magnitude is comparable to
-            # the unconditional step — otherwise the huge ||∇_{x_t} L_grad||
-            # (parameter-space second-order) destroys the trajectory.
-            denom = grad_xt.flatten(1).norm(dim=1).view(-1, 1, 1, 1) + 1e-12
-            guidance = eta * grad_xt / denom
+            # DPS-style scaling (Chung et al. 2023, Eq. 14): divide by
+            # sqrt(L_grad) rather than ||grad_xt||. Dimensionally this makes
+            # guidance magnitude proportional to sqrt of matching error, which
+            # is the schedule the DPS paper proves convergent for posterior
+            # sampling. Making the guidance strictly unit-norm (as we did
+            # previously) is too weak and let the unconditional trajectory
+            # dominate the blend.
+            guidance_denom = torch.sqrt(loss_grad.detach()) + 1e-8
+            guidance = eta * grad_xt / guidance_denom
 
             # Eq. 17 blend of d_sample and d_star.
             d_sample = x_t_minus_1_uncond

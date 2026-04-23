@@ -347,20 +347,33 @@ class GINASPaper:
         return (x_01 - self._mean) / self._std
 
     def _candidate_space(self):
-        """M candidate (base_ch, skip) configs spanning the NAS space."""
+        """M candidate (base_ch, skip) configs.
+
+        Ordered over-parameterised first since Yu et al.'s core claim is
+        that the architectural prior from an **over-parameterised**
+        convolutional network drives the attack; smaller networks are
+        kept only so n_candidates \u2265 5 still has variety.
+        """
         cfgs = [
-            {'base_ch': 32, 'skip': False},
-            {'base_ch': 48, 'skip': False},
-            {'base_ch': 64, 'skip': False},
-            {'base_ch': 64, 'skip': True},
-            {'base_ch': 96, 'skip': False},
-            {'base_ch': 128, 'skip': False},
             {'base_ch': 128, 'skip': True},
+            {'base_ch': 128, 'skip': False},
+            {'base_ch': 96, 'skip': True},
+            {'base_ch': 96, 'skip': False},
+            {'base_ch': 64, 'skip': True},
+            {'base_ch': 64, 'skip': False},
+            {'base_ch': 48, 'skip': False},
         ]
         return cfgs[: self.n_candidates]
 
     def _compute_grad_loss(self, x_gen, rf, labels):
-        """Evaluate L_grad(x_gen) = ||grad_theta CE - g_real||^2 on generator output."""
+        """Evaluate gradient-matching loss on generator output.
+
+        Per Yu et al. Eq (7), the distance metric is **negative cosine
+        similarity**, not L2. This matches the Geiping-family recipe and
+        (in our ablations) is strictly better on trained models where
+        ``||df||`` is small and L2 stalls.
+        """
+        import torch.nn.functional as F
         x_cls = self._gen_to_classifier_space(x_gen)
         logits = self.model(x_cls)
         ce = self.criterion(logits, labels)
@@ -368,7 +381,9 @@ class GINASPaper:
             ce, self.model.parameters(), create_graph=True, retain_graph=True,
         )
         df = self._extract_focus(dg)
-        return ((df - rf) ** 2).sum()
+        return 1.0 - F.cosine_similarity(
+            df.unsqueeze(0), rf.unsqueeze(0),
+        ).squeeze()
 
     def _warmup_candidate(self, cfg, z, rf, labels):
         """Run a short warmup and return (generator, final L_grad)."""

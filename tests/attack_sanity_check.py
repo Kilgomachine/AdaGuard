@@ -44,15 +44,23 @@ CIFAR_MEAN = torch.tensor([0.4914, 0.4822, 0.4465]).view(1, 3, 1, 1)
 CIFAR_STD = torch.tensor([0.2470, 0.2435, 0.2616]).view(1, 3, 1, 1)
 
 # Paper PSNR targets on CIFAR-10 (undefended, B=16 unless noted).
-# GradInversion: Yin et al 2021 — reports ~13 dB ImageNet full recipe;
-#   no CIFAR number in paper, so we use the "functional" target of PSNR > 15 dB
-#   (well above noise-floor ~7 dB).
-# GI-NAS: Yu et al 2025 — Table IV, CIFAR-10 B=16 = 30.5 dB.
-# GGCDM: Meng et al 2025 — undefended CelebA ~41 dB; DP sigma^2=0.01 ~15 dB.
+# Updated per Attack Restructure 1 (docs/attack_restructure_1.pdf, 2026-04-22):
+#
+# GradInversion: Yin 2021 gives no explicit CIFAR-10 B=16 number. We use a
+#   functional "well above noise floor" target of 15 dB. Attack is the
+#   Geiping 2020 recipe (cosine + signed + TV) since our Yin extensions
+#   under-performed — see GradInversionGeiping class.
+# GI-NAS: Yu 2025 Table IV reports 30.53 dB on CIFAR-10 B=16 *after the
+#   per-batch NAS loop*. We implement a DIP proxy (fixed over-parameterised
+#   U-Net, no NAS); expect 15-25 dB. Target kept at 30.5 for reference.
+# GGCDM: Meng 2025's headline 41 dB is CelebA 256x256 with an FFHQ prior,
+#   not CIFAR-10. Meng never tests on CIFAR. We run the algorithm on a
+#   CIFAR-pretrained DDPM and report whatever it yields; the 41 dB label
+#   is marked [MIS-ATTRIBUTED] so we don't lean on it.
 PAPER_TARGETS = {
-    'gradinversion': {'psnr': 15.0, 'label': '> 15 dB (well above noise floor)'},
-    'gi_nas': {'psnr': 30.5, 'label': '30.5 dB (Yu 2025 Table IV CIFAR B=16)'},
-    'ggcdm': {'psnr': 41.0, 'label': '~41 dB undefended (Meng 2025 CelebA)'},
+    'gradinversion': {'psnr': 15.0, 'label': '> 15 dB (Geiping recipe, noise floor ~7 dB)'},
+    'gi_nas': {'psnr': 30.5, 'label': '30.5 dB (Yu 2025 Table IV post-NAS; DIP proxy expected 15-25 dB)'},
+    'ggcdm': {'psnr': 15.0, 'label': '[MIS-ATTRIBUTED 41 dB is CelebA 256] functional target 15 dB'},
 }
 
 
@@ -118,25 +126,31 @@ def _build_attack(name: str, model, criterion, device, n_iter: int,
         GINASFull, GGCDMFull). Use only to reproduce the old numbers.
     """
     from adaguard.attacks import (
-        GradInversionFull, GINASFull, GINASPaper, GGCDMFull, GGCDMPaper,
+        GradInversionFull, GradInversionGeiping,
+        GINASFull, GINASPaper,
+        GGCDMFull, GGCDMPaper,
     )
 
     if name == 'gradinversion':
-        # GradInversionFull was upgraded in-place (Langevin + warmup +
-        # registration-based group consistency), so 'paper' and 'full' map
-        # to the same class — just with different defaults.
+        # Attack Restructure 1 (2026-04-22): variant='paper' routes to the
+        # Geiping 2020 Inverting-Gradients recipe (cosine + signed + TV).
+        # Our Yin-faithful extensions (BN match, Langevin, group
+        # consistency) were net-negative in ablations. variant='full'
+        # keeps the Yin-extended GradInversionFull for reproducing the
+        # pre-restructure numbers.
+        if variant == 'paper':
+            return GradInversionGeiping(
+                model, criterion, device,
+                n_iter=n_iter, lr=0.1, tv_lambda=1e-4,
+            )
         kwargs = dict(
             n_iter=n_iter, lr=0.1,
             tv_lambda=1e-4, l2_lambda=1e-6, bn_lambda=0.1,
             n_candidates=n_candidates,
             use_l2_grad=True,
+            warmup_iters=0,
+            langevin_sigma=0.0,
         )
-        if variant == 'paper':
-            kwargs['warmup_iters'] = 50
-            kwargs['langevin_sigma'] = 1e-3
-        else:
-            kwargs['warmup_iters'] = 0
-            kwargs['langevin_sigma'] = 0.0
         return GradInversionFull(model, criterion, device, **kwargs)
 
     if name == 'gi_nas':
@@ -152,9 +166,11 @@ def _build_attack(name: str, model, criterion, device, n_iter: int,
 
     if name == 'ggcdm':
         if variant == 'paper':
+            # Restructure 1: mr=0.20 (Meng Table 6), guidance_scale=1.0,
+            # DPS sqrt(L) scaling baked into GGCDMPaper.attack().
             return GGCDMPaper(
                 model, criterion, device,
-                n_iter=n_iter, guidance_rate=0.5, guidance_scale=1.0,
+                n_iter=n_iter, guidance_rate=0.20, guidance_scale=1.0,
             )
         return GGCDMFull(
             model, criterion, device,

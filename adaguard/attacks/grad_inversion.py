@@ -368,3 +368,170 @@ class GradInversionFull(GradInversionAttack):
                 pass
 
         return result
+
+
+# ─── Geiping Inverting-Gradients recipe ─────────────────────────────
+
+_CIFAR_MEAN = (0.4914, 0.4822, 0.4465)
+_CIFAR_STD = (0.2470, 0.2435, 0.2616)
+
+
+class GradInversionGeiping:
+    """Clean Inverting-Gradients recipe (Geiping et al. 2020).
+
+    This is the optimisation core that Yin's GradInversion builds on top of.
+    Our own Yin extensions (BN-feature matching, Langevin, group
+    consistency) were net-negative in ablations (Attack Restructure 1,
+    2026-04-22) — Geiping's cosine + signed-gradient + TV recipe recovered
+    8-10 dB PSNR on V1 while the Yin extensions stalled at 5-7 dB.
+
+    We therefore use Geiping's recipe as the GradInversion implementation
+    for Phase 4 paper claims, documenting it as "GradInversion core
+    (Geiping recipe, no BN / group-consistency extensions)". The
+    breaching library also implements the Yin recipe with the same
+    group-consistency gap — see breaching.seethroughgradients.
+
+    Recipe:
+      * Optimise a normalised image x in [-3, 3] (mean=0, std=1 prior).
+      * Loss = 1 - cos_sim(grad_W(f(x), y), grad_W_real) + TV(x) * tv_lambda.
+      * Signed gradient step on x before Adam update (Geiping Sec 3.2).
+      * Adam(lr=0.1) + cosine schedule to zero over n_iter.
+      * Box constraints every step: x ∈ [-3, 3] (roughly [0, 1] image
+        range after de-normalisation).
+    """
+
+    def __init__(self, model, criterion, device, n_iter=20000, lr=0.1,
+                 tv_lambda=1e-4, focus_layers=None):
+        self.model = model
+        self.criterion = criterion
+        self.device = device
+        self.n_iter = int(n_iter)
+        self.lr = float(lr)
+        self.tv_lambda = float(tv_lambda)
+        self.focus_layers = focus_layers or []
+        self._mean = torch.tensor(_CIFAR_MEAN, device=device).view(1, 3, 1, 1)
+        self._std = torch.tensor(_CIFAR_STD, device=device).view(1, 3, 1, 1)
+
+    def _tv(self, x):
+        return (
+            torch.sum(torch.abs(x[:, :, 1:, :] - x[:, :, :-1, :]))
+            + torch.sum(torch.abs(x[:, :, :, 1:] - x[:, :, :, :-1]))
+        )
+
+    def _extract_focus(self, grads_tuple):
+        if not self.focus_layers:
+            return torch.cat([g.flatten() for g in grads_tuple])
+        parts = []
+        for (name, _), g in zip(self.model.named_parameters(), grads_tuple):
+            if name in self.focus_layers:
+                parts.append(g.flatten())
+        return torch.cat(parts) if parts else torch.cat(
+            [g.flatten() for g in grads_tuple]
+        )
+
+    def _get_real_focus(self, real_grad_dict):
+        if not self.focus_layers:
+            return torch.cat([g.flatten() for g in real_grad_dict.values()])
+        parts = [
+            real_grad_dict[n].flatten()
+            for n in self.focus_layers if n in real_grad_dict
+        ]
+        return torch.cat(parts) if parts else torch.cat(
+            [g.flatten() for g in real_grad_dict.values()]
+        )
+
+    def attack(self, real_grad_dict, real_flat_grad, batch_size=1, labels=None,
+               original_images=None):
+        if labels is None:
+            if 'fc2.weight' in real_grad_dict and batch_size == 1:
+                labels = torch.tensor(
+                    [real_grad_dict['fc2.weight'].cpu().sum(1).argmin().item()],
+                    dtype=torch.long, device=self.device,
+                )
+            else:
+                labels = torch.randint(0, 10, (batch_size,), device=self.device)
+
+        rf = self._get_real_focus(real_grad_dict).detach()
+
+        x = torch.randn(batch_size, 3, 32, 32, device=self.device,
+                        requires_grad=True)
+        opt = optim.Adam([x], lr=self.lr)
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            opt, T_max=self.n_iter, eta_min=0.0,
+        )
+
+        best_loss = float('inf')
+        best_x = x.detach().clone()
+
+        for step in range(self.n_iter):
+            opt.zero_grad()
+            self.model.zero_grad()
+
+            logits = self.model(x)
+            ce = self.criterion(logits, labels)
+            dg = torch.autograd.grad(ce, self.model.parameters(),
+                                     create_graph=True)
+            df = self._extract_focus(dg)
+
+            cos_loss = 1.0 - F.cosine_similarity(
+                df.unsqueeze(0), rf.unsqueeze(0),
+            ).squeeze()
+            tv = self._tv(x) * self.tv_lambda
+            loss = cos_loss + tv
+            loss.backward()
+
+            # Signed gradient step (Geiping Sec 3.2).
+            with torch.no_grad():
+                if x.grad is not None:
+                    x.grad.sign_()
+
+            opt.step()
+            scheduler.step()
+
+            with torch.no_grad():
+                x.data.clamp_(-3.0, 3.0)
+
+            cur = loss.item()
+            if cur < best_loss:
+                best_loss = cur
+                best_x = x.detach().clone()
+
+            if (step + 1) % 2000 == 0:
+                print(
+                    f"        GradInv-Geiping [{step+1}/{self.n_iter}] "
+                    f"loss={cur:.4f} cos={cos_loss.item():.4f}",
+                    flush=True,
+                )
+
+        # Recon in [0, 1] for metrics.
+        with torch.no_grad():
+            recon_01 = (best_x * self._std + self._mean).clamp(0, 1)
+
+        # Gradient-space score for LeakScore compatibility.
+        x_for_score = best_x.detach().clone().requires_grad_(True)
+        dg_f = torch.autograd.grad(
+            self.criterion(self.model(x_for_score), labels),
+            self.model.parameters(),
+        )
+        recon_g = self._extract_focus(dg_f).detach()
+        ratio = torch.norm(rf - recon_g, 2).item() / max(
+            torch.norm(rf, 2).item(), 1e-12,
+        )
+        score = max(0.0, 1.0 - ratio)
+
+        result = {
+            'empirical_gradinversion': max(0.0, min(1.0, score)),
+            'score': max(0.0, min(1.0, score)),
+            'reconstructed_images': recon_01,
+        }
+
+        if original_images is not None:
+            try:
+                orig_img = original_images[:batch_size].detach().clamp(0, 1)
+                result['gi_gradinversion_mse'] = compute_mse(orig_img, recon_01)
+                result['gi_gradinversion_psnr'] = compute_psnr(orig_img, recon_01)
+                result['gi_gradinversion_ssim'] = compute_ssim(orig_img, recon_01)
+            except Exception:
+                pass
+
+        return result
