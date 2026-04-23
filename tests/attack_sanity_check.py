@@ -157,6 +157,74 @@ def _recompute_gradient(model, images, labels, criterion, device):
     return gd
 
 
+def _check_artifact_consistency(model, global_state_gpu, weight_delta,
+                                images, labels, criterion, device,
+                                saved_gd):
+    """Verify the saved gradient_dict is consistent with (global, weight_delta, images, labels).
+
+    Reconstructs the local model via `global - weight_delta`, recomputes
+    the gradient at the FULL saved batch, and compares layer-by-layer
+    against the saved gradient_dict.
+
+    A self-consistent artifact has:
+      * mean relative diff  <= 1e-4   (float32 round-off territory)
+      * max  relative diff  <= 1e-3   (per-layer tolerance)
+
+    Large diffs mean the Phase-1 simulator saved a gradient that does
+    not correspond to the saved (images, labels, weight_delta) triple —
+    i.e., the artifact is internally inconsistent and any B != saved_B
+    recompute is attacking a phantom.
+    """
+    if weight_delta is None:
+        return None
+
+    local_state = {
+        k: (global_state_gpu[k] - weight_delta[k].to(device))
+        if k in weight_delta else global_state_gpu[k]
+        for k in global_state_gpu
+    }
+    model.load_state_dict(local_state)
+    model.eval()
+    recomputed = _recompute_gradient(model, images, labels, criterion, device)
+
+    per_layer = {}
+    rel_diffs = []
+    for name, saved_g in saved_gd.items():
+        if name not in recomputed:
+            per_layer[name] = {'status': 'missing_in_recompute'}
+            continue
+        s = saved_g.to(device).float()
+        r = recomputed[name].float()
+        diff = float((s - r).norm().item())
+        saved_norm = float(s.norm().item())
+        recomp_norm = float(r.norm().item())
+        ref = max(saved_norm, 1e-12)
+        rel = diff / ref
+        per_layer[name] = {
+            'saved_norm': saved_norm,
+            'recomp_norm': recomp_norm,
+            'diff_norm': diff,
+            'rel_diff': rel,
+        }
+        rel_diffs.append(rel)
+
+    max_rel = max(rel_diffs) if rel_diffs else None
+    mean_rel = (sum(rel_diffs) / len(rel_diffs)) if rel_diffs else None
+
+    worst = sorted(
+        ((n, d['rel_diff']) for n, d in per_layer.items() if 'rel_diff' in d),
+        key=lambda x: -x[1],
+    )[:5]
+
+    return {
+        'max_rel_diff': max_rel,
+        'mean_rel_diff': mean_rel,
+        'n_layers': len(rel_diffs),
+        'worst_layers': [{'name': n, 'rel_diff': r} for n, r in worst],
+        'per_layer': per_layer,
+    }
+
+
 def _build_attack(name: str, model, criterion, device, n_iter: int,
                   n_candidates: int = 1, variant: str = 'paper'):
     """Construct an attack by name.
@@ -251,6 +319,15 @@ def main():
                          'the saved local model (global - weight_delta). '
                          'Use to reproduce paper-matched protocols: '
                          'GI-NAS B=4, GradInversion B=1/8, GGCDM B=1.')
+    ap.add_argument('--check-consistency', action='store_true',
+                    help='Before running the attack, reconstruct the local '
+                         'model (global - weight_delta), recompute the '
+                         'gradient at the full saved batch, and compare '
+                         'layer-by-layer to the saved gradient_dict. Use '
+                         'to verify the Phase-1 artifact is self-consistent.')
+    ap.add_argument('--consistency-only', action='store_true',
+                    help='Run --check-consistency and exit without attacking. '
+                         'Use when you only want to audit the artifact.')
     ap.add_argument('--out', default=None,
                     help='Optional JSON path to dump the metrics dict')
     args = ap.parse_args()
@@ -287,6 +364,47 @@ def main():
     model.load_state_dict(global_state_gpu)
     model.eval()
     criterion = nn.CrossEntropyLoss()
+
+    consistency_report = None
+    if (args.check_consistency or args.consistency_only) and orig is not None and labels is not None:
+        wd = data.get('weight_delta')
+        if wd is None:
+            print("\n[consistency] no weight_delta in artifact — skipping check.")
+        else:
+            print("\n[consistency] reconstructing local model and "
+                  "recomputing gradient at full saved batch...")
+            consistency_report = _check_artifact_consistency(
+                model, global_state_gpu, wd,
+                orig, labels, criterion, device, gd,
+            )
+            mx = consistency_report['max_rel_diff']
+            mn = consistency_report['mean_rel_diff']
+            nl = consistency_report['n_layers']
+            print(f"[consistency] layers={nl}  mean_rel_diff={mn:.2e}  "
+                  f"max_rel_diff={mx:.2e}")
+            if mx is not None and mx <= 1e-3:
+                print("[consistency] VERDICT: self-consistent "
+                      "(artifact matches (global, weight_delta, images, labels))")
+            else:
+                print("[consistency] VERDICT: INCONSISTENT "
+                      "(saved gradient does not match recomputed gradient)")
+                print("[consistency] worst layers:")
+                for w in consistency_report['worst_layers']:
+                    print(f"    {w['name']:40s}  rel_diff={w['rel_diff']:.3e}")
+
+            # Reload global state so any downstream work starts from a
+            # known baseline; batch-size override block below will reload
+            # local state itself if needed.
+            model.load_state_dict(global_state_gpu)
+            model.eval()
+
+        if args.consistency_only:
+            if args.out:
+                import json
+                with open(args.out, 'w') as f:
+                    json.dump({'consistency': consistency_report}, f, indent=2)
+                print(f"Wrote consistency report -> {args.out}")
+            return
 
     # Batch-size override: subsample and recompute the gradient against
     # the local model. This lets us probe paper-matched protocols
@@ -387,6 +505,14 @@ def main():
 
     if label_rec is not None:
         metrics['label_recovery'] = label_rec
+
+    if consistency_report is not None:
+        metrics['consistency'] = {
+            'max_rel_diff': consistency_report['max_rel_diff'],
+            'mean_rel_diff': consistency_report['mean_rel_diff'],
+            'n_layers': consistency_report['n_layers'],
+            'worst_layers': consistency_report['worst_layers'],
+        }
 
     if orig is not None:
         # Phase-1 saves normalised tensors; denormalise before metric comparison.
