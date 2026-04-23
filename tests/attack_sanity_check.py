@@ -69,6 +69,12 @@ PAPER_TARGETS = {
         'label': '> 15 dB on CIFAR-10 (Yin 2021 headline is ImageNet-224 '
                  'post-registration PSNR; no CIFAR-10 B=16 target in paper)',
     },
+    'gradinversion_breaching': {
+        'psnr': 15.0,
+        'label': '> 15 dB on CIFAR-10 via breaching.seethroughgradients '
+                 '(Yin 2021 with BN-matching; group consistency not '
+                 'implemented upstream)',
+    },
     'gi_nas': {
         'psnr': 35.99,
         'label': '35.99 dB at B=4 (Yu 2025 Table III, arXiv v4). DIP '
@@ -305,10 +311,19 @@ def _build_attack(name: str, model, criterion, device, n_iter: int,
         GINASFull, GGCDMFull). Use only to reproduce the old numbers.
     """
     from adaguard.attacks import (
-        GradInversionFull, GradInversionGeiping,
+        GradInversionFull, GradInversionGeiping, GradInversionBreaching,
         GINASFull, GINASPaper,
         GGCDMFull, GGCDMPaper,
     )
+
+    if name == 'gradinversion_breaching':
+        return GradInversionBreaching(
+            model, criterion, device,
+            n_iter=n_iter,
+            deep_inv_scale=0.1,
+            tv_scale=1e-4,
+            langevin_noise=0.01,
+        )
 
     if name == 'gradinversion':
         # Attack Restructure 1 (2026-04-22): variant='paper' routes to the
@@ -368,7 +383,8 @@ def main():
     ap.add_argument('--client-id', type=int, default=None,
                     help='Specific client id; defaults to the first found')
     ap.add_argument('--attack', required=True,
-                    choices=['gradinversion', 'gi_nas', 'ggcdm'])
+                    choices=['gradinversion', 'gradinversion_breaching',
+                             'gi_nas', 'ggcdm'])
     ap.add_argument('--n-iter', type=int, default=20000,
                     help='Override iteration count (default: paper budget)')
     ap.add_argument('--n-candidates', type=int, default=None,
@@ -635,7 +651,12 @@ def main():
     # Per-attack default for n_candidates — NAS and group-consistency only
     # work for n > 1.
     if args.n_candidates is None:
-        n_cand = {'gradinversion': 4, 'gi_nas': 5, 'ggcdm': 1}[args.attack]
+        n_cand = {
+            'gradinversion': 4,
+            'gradinversion_breaching': 1,
+            'gi_nas': 5,
+            'ggcdm': 1,
+        }[args.attack]
     else:
         n_cand = args.n_candidates
 

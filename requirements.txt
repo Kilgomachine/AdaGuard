@@ -12,3 +12,7 @@ lpips
 diffusers
 huggingface_hub
 accelerate
+
+# Yin 2021 GradInversion reference implementation (Geiping's lab)
+# pulls in hydra-core and omegaconf transitively
+breaching @ git+https://github.com/JonasGeiping/breaching.git

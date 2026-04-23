@@ -3,6 +3,7 @@ from .grad_inversion import (
     GradInversionFull,
     GradInversionGeiping,
 )
+from .grad_inversion_breaching import GradInversionBreaching
 from .gi_nas import GINASAttack, GINASFull, GINASPaper
 from .ggcdm import GGCDMAttack, GGCDMFull, GGCDMPaper
 from .label_recovery import (
