@@ -1,0 +1,23 @@
+{
+  "attack": "gi_nas",
+  "n_iter": 2000,
+  "n_candidates": null,
+  "time_s": 50.68158459663391,
+  "gradient_score": 0.6066732118015254,
+  "label_recovery": {
+    "asr": 1.0,
+    "predicted": [
+      6
+    ],
+    "truth": [
+      6
+    ],
+    "source": "fc.bias",
+    "key_used": "fc.bias",
+    "signal": 0.017908567562699318
+  },
+  "mse": 0.014542334713041782,
+  "psnr": 18.373658636562457,
+  "ssim": 0.6991020441055298,
+  "lpips": 0.01945391483604908
+}

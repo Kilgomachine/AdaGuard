@@ -43,3 +43,6 @@ slurm-*.out
 
 # Local experiment notes
 EXPERIMENT_SUMMARY.md
+data/paper_data/**/*.pt
+data/paper_data/**/*.pth
+data/paper_data/**/*.npz

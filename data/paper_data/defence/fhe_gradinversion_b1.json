@@ -1,0 +1,23 @@
+{
+  "attack": "gradinversion",
+  "n_iter": 20000,
+  "n_candidates": null,
+  "time_s": 353.59970211982727,
+  "gradient_score": 0.0,
+  "label_recovery": {
+    "asr": 0.0,
+    "predicted": [
+      0
+    ],
+    "truth": [
+      6
+    ],
+    "source": "fc.weight.rowsum",
+    "key_used": "fc.weight",
+    "signal": 0.0
+  },
+  "mse": 0.12009993940591812,
+  "psnr": 9.204572117118486,
+  "ssim": 0.02561762121816476,
+  "lpips": 0.725139856338501
+}
