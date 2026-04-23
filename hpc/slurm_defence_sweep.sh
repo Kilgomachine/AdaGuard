@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
-#SBATCH --time=4:00:00
+#SBATCH --time=6:00:00
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=maguir@oakland.edu
 # =============================================================
@@ -19,15 +19,22 @@
 #   - Artifact self-consistency verified (max_rel_diff 1.67e-3).
 #
 # Therefore defence evaluation is only meaningful at B=1. This
-# job runs the 4x2 matrix (V1/V2/V4/V6 x GradInv/GI-NAS) on a
-# single V1 artifact with sweep-time defence re-application
+# job runs the 4x3 matrix (V1/V2/V4/V6 x GradInv/GGCDM/GI-NAS)
+# on a single V1 artifact with sweep-time defence re-application
 # (simulator.py:455 saves raw pre-defence gradient, so we apply
 # the defence inside attack_sanity_check.py via --defence).
 #
+# The three attacks are the paper's "Shadow Attacks" framework
+# (sec IV.E): GradInversion covers batch resilience, GGCDM covers
+# noise resilience, GI-NAS covers prior/heterogeneity resilience.
+# Our GGCDM is a DPS proxy (Meng doesn't evaluate on CIFAR), this
+# caveat goes in sec VI.E protocol-fidelity limitations.
+#
 # Expected runtime:
-#   - 8 runs. GradInv 20k iters at B=1 ~= 5 min each on V100.
+#   - 12 runs. GradInv 20k iters at B=1 ~= 5 min each on V100.
+#   - GGCDM 100 iters at B=1 ~= 2 min each.
 #   - GI-NAS 2k iters at B=1 ~= 1 min each.
-#   - Total ~= 4 x (5+1) = 24 min. Budget 4h for safety margin.
+#   - Total ~= 4 x (5+2+1) = 32 min. Budget 6h for safety margin.
 #
 # Usage:
 #   sbatch hpc/slurm_defence_sweep.sh
@@ -76,6 +83,7 @@ run_one () {
 # V6: AdaGuard core (Fisher encryption, top defence-pct by Fisher score).
 for defence in none fhe maskcrypt fisher; do
     run_one gradinversion 20000 "$defence"
+    run_one ggcdm         100   "$defence"
     run_one gi_nas        2000  "$defence"
 done
 
