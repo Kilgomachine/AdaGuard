@@ -402,6 +402,17 @@ def main():
                     help='Print per-client unique-label counts for the '
                          'round and exit. Use before --auto-pick-diverse '
                          'to see what is available.')
+    ap.add_argument('--defence',
+                    choices=['none', 'fhe', 'maskcrypt', 'fisher'],
+                    default='none',
+                    help='Apply a defence to the (possibly recomputed) '
+                         'gradient_dict before running the attack. Needed '
+                         'because Phase-1 artifacts save the RAW pre-defence '
+                         'gradient regardless of scenario. '
+                         'none=V1, fhe=V2 (zero all grads), '
+                         'maskcrypt=V4, fisher=V6 (AdaGuard core).')
+    ap.add_argument('--defence-pct', type=float, default=0.1,
+                    help='Fraction of parameters to encrypt (MaskCrypt/Fisher).')
     ap.add_argument('--check-consistency', action='store_true',
                     help='Before running the attack, reconstruct the local '
                          'model (global - weight_delta), recompute the '
@@ -565,6 +576,38 @@ def main():
             # Put model back into eval so the attack's forward pass is
             # deterministic w.r.t. BN.
             model.eval()
+
+    if args.defence != 'none':
+        total = sum(g.numel() for g in gd.values())
+        gd_cpu = {k: v.detach().cpu() for k, v in gd.items()}
+        if args.defence == 'fhe':
+            gd = {k: torch.zeros_like(v) for k, v in gd_cpu.items()}
+            print(f"\n[defence=fhe] zeroed all {total} params "
+                  "(simulates full HE: adversary sees nothing)")
+        elif args.defence == 'fisher':
+            from adaguard.encryption.fisher_encrypt import FisherEncryptor
+            k_enc = max(1, int(args.defence_pct * total))
+            enc = FisherEncryptor()
+            gd, meta = enc.encrypt(gd_cpu, k=k_enc)
+            print(f"\n[defence=fisher] encrypted "
+                  f"{meta['weights_encrypted']}/{total} params "
+                  f"({meta['pct_encrypted']*100:.1f}%)")
+        elif args.defence == 'maskcrypt':
+            from adaguard.encryption.maskcrypt_encrypt import MaskCryptEncryptor
+            wd = data.get('weight_delta')
+            if wd is None:
+                raise RuntimeError("MaskCrypt needs weight_delta to rank "
+                                   "vulnerability; artifact has none.")
+            old_w = {k: data['global_state'][k].detach().cpu()
+                     for k in gd_cpu if k in data['global_state']}
+            new_w = {k: (data['global_state'][k] - wd[k]).detach().cpu()
+                     for k in gd_cpu if k in wd}
+            k_enc = max(1, int(args.defence_pct * total))
+            enc = MaskCryptEncryptor(enc_pct=args.defence_pct)
+            gd, meta = enc.encrypt(gd_cpu, old_w, new_w, k=k_enc)
+            print(f"\n[defence=maskcrypt] encrypted "
+                  f"{meta['weights_encrypted']}/{total} params "
+                  f"({meta['pct_encrypted']*100:.1f}%)")
 
     gd_gpu = {k: v.to(device) for k, v in gd.items()}
     flat = torch.cat([g.flatten() for g in gd_gpu.values()])
