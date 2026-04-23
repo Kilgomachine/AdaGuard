@@ -38,6 +38,7 @@ from adaguard.models import create_model  # noqa: E402
 from adaguard.utils.reconstruction import (  # noqa: E402
     compute_mse, compute_psnr, compute_ssim, compute_lpips,
 )
+from adaguard.attacks.label_recovery import label_recovery_summary  # noqa: E402
 
 # CIFAR-10 normalization used by Phase-1 training data loader.
 CIFAR_MEAN = torch.tensor([0.4914, 0.4822, 0.4465]).view(1, 3, 1, 1)
@@ -238,6 +239,25 @@ def main():
     labels_gpu = labels.to(device) if labels is not None else None
     bs = orig.shape[0] if orig is not None else 1
 
+    # Analytical label-recovery (iDLG / LLG+). Runs in milliseconds, no
+    # optimisation loop, independent of the pixel-reconstruction attack.
+    # This is what paper-style ASR headlines almost always measure, and
+    # is the metric that actually separates AdaGuard's Fisher encryption
+    # from an undefended baseline at B=16 Fisher-non-IID, where pixel
+    # PSNR collapses to noise floor for everyone.
+    label_rec = None
+    if labels is not None:
+        label_rec = label_recovery_summary(
+            gd_gpu, labels_gpu, num_classes=args.num_classes,
+        )
+        print(
+            f"\nLabel recovery (LLG+): "
+            f"asr={label_rec['asr']:.3f}  "
+            f"source={label_rec['source']}  "
+            f"key={label_rec['key_used']}  "
+            f"signal={label_rec['signal']:.4f}"
+        )
+
     # Per-attack default for n_candidates — NAS and group-consistency only
     # work for n > 1.
     if args.n_candidates is None:
@@ -275,6 +295,9 @@ def main():
         'gradient_score': float(result.get('score', 0.0)),
     }
 
+    if label_rec is not None:
+        metrics['label_recovery'] = label_rec
+
     if orig is not None:
         # Phase-1 saves normalised tensors; denormalise before metric comparison.
         orig_01 = _denormalize(orig_gpu).clamp(0, 1)
@@ -303,6 +326,12 @@ def main():
             print(f"  LPIPS       : {lp:7.4f}")
         print(f"  MSE         : {mse:.6f}")
         print(f"  grad score  : {metrics['gradient_score']:.4f}")
+        if label_rec is not None:
+            print(
+                f"  label ASR   : {label_rec['asr']:7.4f}   "
+                f"(source={label_rec['source']}, "
+                f"signal={label_rec['signal']:.4f})"
+            )
         print(f"  wallclock   : {dt:.1f}s")
 
         if not (psnr != psnr):  # not NaN
