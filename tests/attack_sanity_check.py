@@ -429,6 +429,13 @@ def main():
                          'maskcrypt=V4, fisher=V6 (AdaGuard core).')
     ap.add_argument('--defence-pct', type=float, default=0.1,
                     help='Fraction of parameters to encrypt (MaskCrypt/Fisher).')
+    ap.add_argument('--no-classifier-head-guarantee', action='store_true',
+                    help='Disable AdaGuard-Fisher classifier-head guarantee '
+                         '(force-include fc.bias / fc.weight in encrypted set). '
+                         'Use for ablation: reproduces the pre-fix Fisher '
+                         'selector that exposed fc.bias on seed 456 round 249 '
+                         'and produced label ASR=1.0. Default behaviour ENABLES '
+                         'the guarantee (the post-fix AdaGuard-Fisher).')
     ap.add_argument('--check-consistency', action='store_true',
                     help='Before running the attack, reconstruct the local '
                          'model (global - weight_delta), recompute the '
@@ -593,6 +600,7 @@ def main():
             # deterministic w.r.t. BN.
             model.eval()
 
+    defence_meta = None  # JSON-serializable summary surfaced into output.
     if args.defence != 'none':
         total = sum(g.numel() for g in gd.values())
         gd_cpu = {k: v.detach().cpu() for k, v in gd.items()}
@@ -600,14 +608,40 @@ def main():
             gd = {k: torch.zeros_like(v) for k, v in gd_cpu.items()}
             print(f"\n[defence=fhe] zeroed all {total} params "
                   "(simulates full HE: adversary sees nothing)")
+            defence_meta = {'strategy': 'fhe', 'weights_encrypted': total,
+                            'pct_encrypted': 1.0}
         elif args.defence == 'fisher':
             from adaguard.encryption.fisher_encrypt import FisherEncryptor
+            from adaguard.metrics.fisher import FisherInformationMetric
             k_enc = max(1, int(args.defence_pct * total))
-            enc = FisherEncryptor()
+            # Default: classifier-head guarantee ENABLED (post-fix Fisher).
+            # Pass --no-classifier-head-guarantee to disable for ablation.
+            mandatory = () if args.no_classifier_head_guarantee else None
+            fisher_metric = FisherInformationMetric(
+                enc_pct=args.defence_pct,
+                mandatory_layer_substrings=mandatory,
+            )
+            enc = FisherEncryptor(fisher_metric=fisher_metric)
             gd, meta = enc.encrypt(gd_cpu, k=k_enc)
+            guard_state = ('DISABLED (ablation)'
+                           if args.no_classifier_head_guarantee else 'ENABLED')
             print(f"\n[defence=fisher] encrypted "
                   f"{meta['weights_encrypted']}/{total} params "
-                  f"({meta['pct_encrypted']*100:.1f}%)")
+                  f"({meta['pct_encrypted']*100:.1f}%); "
+                  f"classifier-head guarantee {guard_state}; "
+                  f"forced {meta['classifier_head_forced_count']} extra params "
+                  f"in {meta['classifier_head_forced_layers']}")
+            defence_meta = {
+                'strategy': 'fisher',
+                'weights_encrypted': int(meta['weights_encrypted']),
+                'pct_encrypted': float(meta['pct_encrypted']),
+                'encryption_threshold': float(meta['encryption_threshold']),
+                'classifier_head_guarantee': not args.no_classifier_head_guarantee,
+                'classifier_head_forced_count': int(
+                    meta['classifier_head_forced_count']),
+                'classifier_head_forced_layers': list(
+                    meta['classifier_head_forced_layers']),
+            }
         elif args.defence == 'maskcrypt':
             from adaguard.encryption.maskcrypt_encrypt import MaskCryptEncryptor
             wd = data.get('weight_delta')
@@ -624,6 +658,11 @@ def main():
             print(f"\n[defence=maskcrypt] encrypted "
                   f"{meta['weights_encrypted']}/{total} params "
                   f"({meta['pct_encrypted']*100:.1f}%)")
+            defence_meta = {
+                'strategy': 'maskcrypt',
+                'weights_encrypted': int(meta['weights_encrypted']),
+                'pct_encrypted': float(meta['pct_encrypted']),
+            }
 
     gd_gpu = {k: v.to(device) for k, v in gd.items()}
     flat = torch.cat([g.flatten() for g in gd_gpu.values()])
@@ -692,6 +731,9 @@ def main():
 
     if label_rec is not None:
         metrics['label_recovery'] = label_rec
+
+    if defence_meta is not None:
+        metrics['defence_meta'] = defence_meta
 
     if consistency_report is not None:
         metrics['consistency'] = {

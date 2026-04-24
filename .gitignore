@@ -37,6 +37,8 @@ slurm-*.out
 
 # Generated PDFs
 *.pdf
+# ...except paper deliverables (committed so Overleaf can \input them)
+!paper_artifacts/figures/*.pdf
 
 # Secrets
 .env

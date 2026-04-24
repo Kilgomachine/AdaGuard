@@ -63,6 +63,12 @@ class FisherEncryptor:
             'pct_encrypted': fisher_result['pct_encrypted'],
             'encryption_threshold': fisher_result['encryption_threshold'],
             'encrypt_mask': encrypt_mask,
+            # Classifier-head guarantee diagnostics (fisher.py module
+            # docstring explains the failure mode this fixes).
+            'classifier_head_forced_count': fisher_result.get(
+                'classifier_head_forced_count', 0),
+            'classifier_head_forced_layers': fisher_result.get(
+                'classifier_head_forced_layers', []),
         }
 
         return protected_dict, metadata

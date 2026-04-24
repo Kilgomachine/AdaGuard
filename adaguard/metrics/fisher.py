@@ -3,10 +3,41 @@
 F_i = g_i^2 (empirical Fisher approximation).
 Used to identify which parameters leak the most information
 and should be prioritized for encryption.
+
+Classifier-head guarantee
+-------------------------
+A pure global top-K-by-Fisher selector can omit small classifier-head
+tensors (e.g. ResNet's 10-element ``fc.bias``) on certain initialisations
+because their *aggregate* Fisher mass is small relative to a single conv
+layer's worth of parameters, even when their per-parameter scores are
+high. When ``fc.bias`` is exposed, the LLG+/iDLG label-decoding primitive
+walks straight through and label-recovery ASR jumps from 0 to 1.
+
+We observed this failure on seed 456's round-249 model (ASR=1.0 across
+GradInversion, GGCDM, and GI-NAS) while seeds 42 and 123 happened to
+include ``fc.bias`` in the top-K and saw ASR=0. The fix is structural:
+classifier-head parameters are force-included in the encrypted set
+regardless of Fisher score. The cost is negligible (~5,140 params on
+ResNet-18/CIFAR-10, +0.046% of total) and removes the entire class of
+label-leak failures.
+
+To reproduce the *broken* (pre-fix) behaviour for ablation, pass an
+empty tuple: ``mandatory_layer_substrings=()``.
 """
 
 import numpy as np
 import torch
+
+
+# Default classifier-head substrings. Match common naming in torchvision
+# (``fc.``), HuggingFace transformers (``classifier.``), and timm
+# (``head.``) so the guarantee fires across the architectures we use
+# without per-model configuration.
+DEFAULT_MANDATORY_LAYER_SUBSTRINGS = (
+    "fc.bias", "fc.weight",
+    "classifier.bias", "classifier.weight",
+    "head.bias", "head.weight",
+)
 
 
 class FisherInformationMetric:
@@ -15,11 +46,28 @@ class FisherInformationMetric:
     F_i = g_i^2 per weight (empirical Fisher).
     F_round = (1/L) * sum of all F_i across layers.
     Concentration measured via Gini coefficient.
+
+    Parameters
+    ----------
+    topk : int
+        Number of (rank, value) pairs to return for diagnostics.
+    enc_pct : float
+        Fraction of parameters to encrypt (top-K by Fisher score).
+    mandatory_layer_substrings : tuple[str, ...] | None
+        Layers whose name contains any of these substrings are
+        force-included in the encrypted set regardless of Fisher score.
+        Pass ``()`` to disable (reproduces pre-fix behaviour). Pass
+        ``None`` to use :data:`DEFAULT_MANDATORY_LAYER_SUBSTRINGS`.
     """
 
-    def __init__(self, topk=50, enc_pct=0.1):
+    def __init__(self, topk=50, enc_pct=0.1, mandatory_layer_substrings=None):
         self.topk = topk
         self.enc_pct = enc_pct
+        self.mandatory_layer_substrings = (
+            DEFAULT_MANDATORY_LAYER_SUBSTRINGS
+            if mandatory_layer_substrings is None
+            else tuple(mandatory_layer_substrings)
+        )
 
     def compute(self, gradient_dict):
         per_layer = {}
@@ -70,6 +118,27 @@ class FisherInformationMetric:
         threshold = torch.topk(fi_all, k_enc)[0][-1].item()
         mask_encrypt = fi_all >= threshold
 
+        # Classifier-head guarantee. Force-include any parameter whose
+        # owning layer name matches a mandatory substring (e.g. fc.bias).
+        # This is the structural fix for the seed-456 failure mode where
+        # a 10-element fc.bias fell below the global top-K threshold and
+        # exposed the LLG+ label-decoding signal — see module docstring.
+        n_forced = 0
+        forced_layers = []
+        if self.mandatory_layer_substrings:
+            cursor = 0
+            for name, grad in gradient_dict.items():
+                n_layer = grad.numel()
+                if any(s in name for s in self.mandatory_layer_substrings):
+                    already_in = int(
+                        mask_encrypt[cursor:cursor + n_layer].sum().item()
+                    )
+                    n_forced += n_layer - already_in
+                    if already_in < n_layer:
+                        forced_layers.append(name)
+                    mask_encrypt[cursor:cursor + n_layer] = True
+                cursor += n_layer
+
         fi_cpu = fi_all.detach().cpu()
         fi_norm_cpu = fi_norm.detach().cpu()
 
@@ -83,11 +152,17 @@ class FisherInformationMetric:
             'fisher_per_weight_norm': fi_norm_cpu,
             'encryption_threshold': threshold,
             'encrypt_mask': mask_encrypt.cpu(),
+            # Recompute from the merged mask so callers see the actual
+            # encrypted set size (top-K plus mandatory layers).
             'weights_to_encrypt': int(mask_encrypt.sum().item()),
             'pct_encrypted': mask_encrypt.float().mean().item(),
             'topk_fisher_values': topk_vals.detach().cpu(),
             'topk_fisher_indices': topk_idx.detach().cpu(),
             'param_names': param_names,
+            # Classifier-head guarantee diagnostics — let the sweep tool
+            # report whether the guarantee actually fired for this round.
+            'classifier_head_forced_count': n_forced,
+            'classifier_head_forced_layers': forced_layers,
         }
 
     def compute_with_dynamic_k(self, gradient_dict, encrypt_pct):
@@ -114,4 +189,6 @@ class FisherInformationMetric:
             'topk_fisher_values': torch.tensor([]),
             'topk_fisher_indices': torch.tensor([]),
             'param_names': [],
+            'classifier_head_forced_count': 0,
+            'classifier_head_forced_layers': [],
         }

@@ -14,5 +14,6 @@ huggingface_hub
 accelerate
 
 # Yin 2021 GradInversion reference implementation (Geiping's lab)
-# pulls in hydra-core and omegaconf transitively
-breaching @ git+https://github.com/JonasGeiping/breaching.git
+# PyPI 0.1.2 includes the `seethroughgradients` preset (verified 2026-04-22).
+# Pulls in hydra-core and omegaconf transitively.
+breaching==0.1.2
