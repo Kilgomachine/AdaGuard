@@ -13,9 +13,12 @@ Run:
     python -m pytest tests/test_fisher_classifier_head_guarantee.py -v
 or:
     python tests/test_fisher_classifier_head_guarantee.py
-"""
 
-from __future__ import annotations
+Compatibility note: this file deliberately avoids ``from __future__
+import annotations`` and PEP-604 ``X | None`` syntax so it can be
+run on any Python >= 3.5, including HPC login nodes that default
+to an old system Python.
+"""
 
 import sys
 from pathlib import Path
