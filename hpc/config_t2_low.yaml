@@ -1,0 +1,40 @@
+# Grad-accum trigger experiment: T2 lowered from 0.7 to 0.3 so the
+# accumulation pathway actually engages during Phase-1 training.
+# Everything else mirrors the paper-matched 300-client setup.
+model: resnet18
+num_classes: 10
+image_size: 32
+pretrain_epochs: 0
+pretrain_lr: 0.01
+pretrain_batch_size: 128
+
+num_clients: 300
+clients_per_round: 30
+num_rounds: 250
+client_batch_size: 16
+client_local_steps: 10
+client_lr: 0.01
+fl_lr: 1.0
+
+alpha: 1.0
+beta: 1.0
+gamma: 1.0
+
+# === The grad-accum trigger experiment ===
+# T2 is the gradient-accumulation threshold. The paper uses T2=0.7,
+# which never fires on the round-249 LeakScore of 0.385 (see RQ5/S4).
+# Here we drop it to 0.3 so accumulation engages whenever encryption
+# does, giving us a V6+accum row to compare against the V6 baseline.
+T1: 0.3
+T2: 0.3
+
+entropy_bins: 50
+
+empirical_iterations: 50
+empirical_lr: 0.1
+
+gi_iters: 1000
+gi_lr: 0.1
+
+# Hard 3-of-10 non-IID partition matching the paper
+classes_per_client: 3
