@@ -1,11 +1,13 @@
 # Grad-accum trigger experiment: T2 lowered from 0.7 to 0.3 so the
 # accumulation pathway actually engages during Phase-1 training.
-# Everything else mirrors the paper-matched 300-client setup.
+# Mirrors hpc/config_1k.yaml exactly except for the T2/accum-trigger
+# block, so the only intentional difference between this trajectory
+# and the seed=42 baseline is the accumulation behaviour.
 model: resnet18
 num_classes: 10
 image_size: 32
 pretrain_epochs: 0
-pretrain_lr: 0.01
+pretrain_lr: 0.1            # match config_1k.yaml; pretrain_epochs=0 so this is moot anyway
 pretrain_batch_size: 128
 
 num_clients: 300
@@ -27,6 +29,9 @@ gamma: 1.0
 # does, giving us a V6+accum row to compare against the V6 baseline.
 T1: 0.3
 T2: 0.3
+grad_accum_enabled: true
+grad_accum_K: 4
+grad_accum_threshold: 0.3   # explicit; mirrors T2 so the trigger actually fires
 
 entropy_bins: 50
 
@@ -36,5 +41,24 @@ empirical_lr: 0.1
 gi_iters: 1000
 gi_lr: 0.1
 
+mi_samples_per_class: 20
+
+# Fisher / encryption (must match baseline)
+fisher_topk: 50
+encryption_top_percent: 0.1
+
+save_every_n_rounds: 2
+
+# Focus layers (where label info concentrates per iDLG theorem).
+# DEFAULT_CONFIG hard-codes the legacy smallcnn name 'fc2.*'; ResNet-18's
+# classifier head is named 'fc.*'. Without this override the LeakScore's
+# label component pulls from a non-existent layer.
+focus_layers: ['fc.weight', 'fc.bias']
+
+clients_per_gpu: 3
+
 # Hard 3-of-10 non-IID partition matching the paper
 classes_per_client: 3
+min_samples_per_client: 30
+
+seed: 42

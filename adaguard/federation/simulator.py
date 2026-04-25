@@ -373,7 +373,9 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
     # making gradient inversion exponentially harder.
     metrics['grad_accum_activated'] = 0
     metrics['grad_accum_effective_bs'] = batch_size
-    accum_threshold = config.get('grad_accum_threshold', config.get('T2', 0.7))
+    accum_threshold = config.get('grad_accum_threshold')
+    if accum_threshold is None:
+        accum_threshold = config.get('T2', 0.7)
     if (config.get('grad_accum_enabled', True)
             and combined >= accum_threshold):
         K = config.get('grad_accum_K', 4)

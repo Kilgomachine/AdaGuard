@@ -47,7 +47,7 @@ DEFAULT_CONFIG = {
     # B_eff = K * B where K = grad_accum_K
     'grad_accum_enabled': True,
     'grad_accum_K': 4,                # number of accumulation passes
-    'grad_accum_threshold': 0.7,      # LeakScore threshold to trigger (default = T2)
+    'grad_accum_threshold': None,     # None -> follow T2 (set explicitly to override)
 
     # Entropy metric
     'entropy_bins': 50,
