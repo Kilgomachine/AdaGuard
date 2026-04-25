@@ -48,3 +48,9 @@ EXPERIMENT_SUMMARY.md
 data/paper_data/**/*.pt
 data/paper_data/**/*.pth
 data/paper_data/**/*.npz
+
+# Overleaf working copy (source-of-truth lives on Overleaf)
+paper_overleaf/
+
+# Paper deliverable archives (local-only; final PDF lives on Overleaf)
+*.zip
