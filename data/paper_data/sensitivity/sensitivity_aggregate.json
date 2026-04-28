@@ -1,0 +1,3795 @@
+{
+  "S1.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "entropy_bins": 10
+      },
+      "description": "entropy_bins=10",
+      "group": "S1",
+      "last_round": {
+        "accuracy": 0.6887,
+        "avg_leakscore": 0.38109118301447265,
+        "avg_pct_encrypted": 0.020272743577758472,
+        "encryption": "fisher",
+        "encryption_time_s": 56.955869913101196,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8758186924306652
+      },
+      "leakscore_summary": {
+        "max": 0.39727787501817413,
+        "mean": 0.38891272662558063,
+        "min": 0.38109118301447265,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S1.1",
+      "source_file": "S1.1.json",
+      "total_time_s": 16641.429944753647,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3453,
+          0.4743,
+          0.423,
+          0.6887
+        ],
+        "avg_leakscore": [
+          0.39727787501817413,
+          0.3915038095474702,
+          0.38920887441909474,
+          0.3854818911286914,
+          0.38109118301447265
+        ],
+        "avg_pct_encrypted": [
+          0.02431941026200851,
+          0.02287590273966392,
+          0.022302166993419328,
+          0.021370429514596858,
+          0.020272743577758472
+        ]
+      },
+      "value": 10,
+      "variable": "entropy_bins"
+    }
+  ],
+  "S1.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "entropy_bins": 25
+      },
+      "description": "entropy_bins=25",
+      "group": "S1",
+      "last_round": {
+        "accuracy": 0.6863,
+        "avg_leakscore": 0.38865212770494206,
+        "avg_pct_encrypted": 0.022162977287856243,
+        "encryption": "fisher",
+        "encryption_time_s": 58.07451343536377,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8790504668332353
+      },
+      "leakscore_summary": {
+        "max": 0.4089641649597785,
+        "mean": 0.3958591181721072,
+        "min": 0.38865212770494206,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S1.2",
+      "source_file": "S1.2.json",
+      "total_time_s": 16810.068488121033,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3456,
+          0.4677,
+          0.4272,
+          0.6863
+        ],
+        "avg_leakscore": [
+          0.4089641649597785,
+          0.39803771822626505,
+          0.39286566016384583,
+          0.3907759198057047,
+          0.38865212770494206
+        ],
+        "avg_pct_encrypted": [
+          0.02724100314080715,
+          0.02450937566657861,
+          0.02321636974811554,
+          0.02269393776077777,
+          0.022162977287856243
+        ]
+      },
+      "value": 25,
+      "variable": "entropy_bins"
+    }
+  ],
+  "S1.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "entropy_bins": 50
+      },
+      "description": "entropy_bins=50",
+      "group": "S1",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 293.1066401004791,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S1.3",
+      "source_file": "S1.3.json",
+      "total_time_s": 31804.851487636566,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 50,
+      "variable": "entropy_bins"
+    }
+  ],
+  "S1.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "entropy_bins": 100
+      },
+      "description": "entropy_bins=100",
+      "group": "S1",
+      "last_round": {
+        "accuracy": 0.6833,
+        "avg_leakscore": 0.38572373365927176,
+        "avg_pct_encrypted": 0.021430882702892024,
+        "encryption": "fisher",
+        "encryption_time_s": 254.132404088974,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8837815643865851
+      },
+      "leakscore_summary": {
+        "max": 0.4237727882237655,
+        "mean": 0.40432194560809054,
+        "min": 0.38572373365927176,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S1.4",
+      "source_file": "S1.4.json",
+      "total_time_s": 31939.105837106705,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.349,
+          0.4694,
+          0.4274,
+          0.6833
+        ],
+        "avg_leakscore": [
+          0.4237727882237655,
+          0.41158548289449126,
+          0.4034591185251884,
+          0.3970686047377359,
+          0.38572373365927176
+        ],
+        "avg_pct_encrypted": [
+          0.03094315466781457,
+          0.027896320881942906,
+          0.02586473220338424,
+          0.02426710712412993,
+          0.021430882702892024
+        ]
+      },
+      "value": 100,
+      "variable": "entropy_bins"
+    }
+  ],
+  "S1.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "entropy_bins": 200
+      },
+      "description": "entropy_bins=200",
+      "group": "S1",
+      "last_round": {
+        "accuracy": 0.6829,
+        "avg_leakscore": 0.379542111667028,
+        "avg_pct_encrypted": 0.020089910769214233,
+        "encryption": "fisher",
+        "encryption_time_s": 228.9454472064972,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8845865741560731
+      },
+      "leakscore_summary": {
+        "max": 0.43052391915354815,
+        "mean": 0.4058592656103239,
+        "min": 0.379542111667028,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S1.5",
+      "source_file": "S1.5.json",
+      "total_time_s": 31917.498141288757,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3511,
+          0.471,
+          0.4275,
+          0.6829
+        ],
+        "avg_leakscore": [
+          0.43052391915354815,
+          0.41586318396272104,
+          0.40711823100720224,
+          0.39624888226112026,
+          0.379542111667028
+        ],
+        "avg_pct_encrypted": [
+          0.03263092661897341,
+          0.0289657569800814,
+          0.026779513619840146,
+          0.024062187317758797,
+          0.020089910769214233
+        ]
+      },
+      "value": 200,
+      "variable": "entropy_bins"
+    }
+  ],
+  "S10.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "encryption": "maskcrypt",
+        "encryption_top_percent": 0.01,
+        "maskcrypt_mask_mode": "gradient_guided"
+      },
+      "description": "MaskCrypt rho=0.01",
+      "group": "S10",
+      "last_round": {
+        "accuracy": 0.6591,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.009999944513861778,
+        "encryption": "maskcrypt",
+        "encryption_time_s": 282.0593042373657,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.9287431790858884
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S10.1",
+      "source_file": "S10.1.json",
+      "total_time_s": 28966.6809091568,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.2952,
+          0.4566,
+          0.4158,
+          0.6591
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.009999944513861778,
+          0.009999944513861778,
+          0.009999947496987488,
+          0.009999944513861778,
+          0.009999944513861778
+        ]
+      },
+      "value": 0.01,
+      "variable": "maskcrypt_enc_pct"
+    }
+  ],
+  "S10.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "encryption": "maskcrypt",
+        "encryption_top_percent": 0.05,
+        "maskcrypt_mask_mode": "gradient_guided"
+      },
+      "description": "MaskCrypt rho=0.05",
+      "group": "S10",
+      "last_round": {
+        "accuracy": 0.6986,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.049999991050622854,
+        "encryption": "maskcrypt",
+        "encryption_time_s": 245.59122943878174,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8564132104946088
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S10.2",
+      "source_file": "S10.2.json",
+      "total_time_s": 29959.88807272911,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3574,
+          0.4926,
+          0.4462,
+          0.6986
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.049999994033748565,
+          0.049999997016874284,
+          0.049999994033748565,
+          0.049999997016874284,
+          0.049999991050622854
+        ]
+      },
+      "value": 0.05,
+      "variable": "maskcrypt_enc_pct"
+    }
+  ],
+  "S10.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "encryption": "maskcrypt",
+        "encryption_top_percent": 0.1,
+        "maskcrypt_mask_mode": "gradient_guided"
+      },
+      "description": "MaskCrypt rho=0.1",
+      "group": "S10",
+      "last_round": {
+        "accuracy": 0.6992,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.09999999105062285,
+        "encryption": "maskcrypt",
+        "encryption_time_s": 220.26634526252747,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8594833770884743
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S10.3",
+      "source_file": "S10.3.json",
+      "total_time_s": 26050.369000673294,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3747,
+          0.511,
+          0.459,
+          0.6992
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.09999998210124571,
+          0.09999998806749713,
+          0.09999998210124571,
+          0.09999998806749713,
+          0.09999999105062285
+        ]
+      },
+      "value": 0.1,
+      "variable": "maskcrypt_enc_pct"
+    }
+  ],
+  "S10.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "encryption": "maskcrypt",
+        "encryption_top_percent": 0.2,
+        "maskcrypt_mask_mode": "gradient_guided"
+      },
+      "description": "MaskCrypt rho=0.2",
+      "group": "S10",
+      "last_round": {
+        "accuracy": 0.6953,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.19999997315186854,
+        "encryption": "maskcrypt",
+        "encryption_time_s": 296.91472864151,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.87000686911088
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S10.4",
+      "source_file": "S10.4.json",
+      "total_time_s": 26313.0578083992,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3925,
+          0.5388,
+          0.471,
+          0.6953
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.1999999821012457,
+          0.19999997016874282,
+          0.19999996420249141,
+          0.19999997016874282,
+          0.19999997315186854
+        ]
+      },
+      "value": 0.2,
+      "variable": "maskcrypt_enc_pct"
+    }
+  ],
+  "S10.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "encryption": "maskcrypt",
+        "encryption_top_percent": 0.25,
+        "maskcrypt_mask_mode": "gradient_guided"
+      },
+      "description": "MaskCrypt rho=0.25",
+      "group": "S10",
+      "last_round": {
+        "accuracy": 0.694,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.24999997016874292,
+        "encryption": "maskcrypt",
+        "encryption_time_s": 192.73267102241516,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8728551276122467
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S10.5",
+      "source_file": "S10.5.json",
+      "total_time_s": 27047.43562722206,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3983,
+          0.5479,
+          0.4764,
+          0.694
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.24999996718561726,
+          0.24999996420249151,
+          0.24999996121936582,
+          0.24999996718561726,
+          0.24999997016874292
+        ]
+      },
+      "value": 0.25,
+      "variable": "maskcrypt_enc_pct"
+    }
+  ],
+  "S11.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "focus_layers": null
+      },
+      "description": "focus_layers=all",
+      "group": "S11",
+      "last_round": {
+        "accuracy": 0.6816,
+        "avg_leakscore": 0.5217864790244979,
+        "avg_pct_encrypted": 0.05544656999409199,
+        "encryption": "fisher",
+        "encryption_time_s": 299.0266296863556,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8944147779971738
+      },
+      "leakscore_summary": {
+        "max": 0.6144130838181764,
+        "mean": 0.5574678060604071,
+        "min": 0.5217864790244979,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S11.1",
+      "source_file": "S11.1.json",
+      "total_time_s": 28536.781082868576,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3729,
+          0.4969,
+          0.439,
+          0.6816
+        ],
+        "avg_leakscore": [
+          0.6144130838181764,
+          0.5692624367736308,
+          0.5478521260608452,
+          0.5340249046248857,
+          0.5217864790244979
+        ],
+        "avg_pct_encrypted": [
+          0.07860322048266728,
+          0.06731555288036664,
+          0.06196298773090045,
+          0.05850618307789167,
+          0.05544656999409199
+        ]
+      },
+      "value": "all",
+      "variable": "focus_layers"
+    }
+  ],
+  "S11.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "focus_layers": [
+          "fc.weight",
+          "fc.bias"
+        ]
+      },
+      "description": "focus_layers=final_fc",
+      "group": "S11",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 211.83465266227722,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S11.2",
+      "source_file": "S11.2.json",
+      "total_time_s": 28966.77215218544,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": "final_fc",
+      "variable": "focus_layers"
+    }
+  ],
+  "S11.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "focus_layers": [
+          "layer4.1.conv2.weight"
+        ]
+      },
+      "description": "focus_layers=penultimate_conv",
+      "group": "S11",
+      "last_round": {
+        "accuracy": 0.6808,
+        "avg_leakscore": 0.5312392163092474,
+        "avg_pct_encrypted": 0.057809754336873694,
+        "encryption": "fisher",
+        "encryption_time_s": 208.47250747680664,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8956326253806488
+      },
+      "leakscore_summary": {
+        "max": 0.6150599073826787,
+        "mean": 0.5581996394147024,
+        "min": 0.5312392163092474,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S11.3",
+      "source_file": "S11.3.json",
+      "total_time_s": 27737.870430231094,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3725,
+          0.4958,
+          0.4392,
+          0.6808
+        ],
+        "avg_leakscore": [
+          0.6150599073826787,
+          0.5625080086629598,
+          0.547401798508975,
+          0.5347892662096514,
+          0.5312392163092474
+        ],
+        "avg_pct_encrypted": [
+          0.07876490925749143,
+          0.06562694335977236,
+          0.061850401510794954,
+          0.05869727320969105,
+          0.057809754336873694
+        ]
+      },
+      "value": "penultimate_conv",
+      "variable": "focus_layers"
+    }
+  ],
+  "S2.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "grad_accum_K": 1
+      },
+      "description": "grad_accum_K=1",
+      "group": "S2",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 316.78543424606323,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S2.1",
+      "source_file": "S2.1.json",
+      "total_time_s": 31724.544802188873,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 1,
+      "variable": "grad_accum_K"
+    }
+  ],
+  "S2.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "grad_accum_K": 2
+      },
+      "description": "grad_accum_K=2",
+      "group": "S2",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 243.81331610679626,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S2.2",
+      "source_file": "S2.2.json",
+      "total_time_s": 30534.22951054573,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 2,
+      "variable": "grad_accum_K"
+    }
+  ],
+  "S2.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "grad_accum_K": 4
+      },
+      "description": "grad_accum_K=4",
+      "group": "S2",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 208.11627888679504,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S2.3",
+      "source_file": "S2.3.json",
+      "total_time_s": 29093.7342338562,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 4,
+      "variable": "grad_accum_K"
+    }
+  ],
+  "S2.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "grad_accum_K": 8
+      },
+      "description": "grad_accum_K=8",
+      "group": "S2",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 249.29960322380066,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S2.4",
+      "source_file": "S2.4.json",
+      "total_time_s": 30546.519856214523,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 8,
+      "variable": "grad_accum_K"
+    }
+  ],
+  "S3.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.1,
+        "T2": 0.7
+      },
+      "description": "T1=0.1",
+      "group": "S3",
+      "last_round": {
+        "accuracy": 0.682,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.04754901044070721,
+        "encryption": "fisher",
+        "encryption_time_s": 199.63791513442993,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8907201086418538
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S3.1",
+      "source_file": "S3.1.json",
+      "total_time_s": 27618.29691696167,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3675,
+          0.489,
+          0.4359,
+          0.682
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.053052182247241335,
+          0.0508536363641421,
+          0.04989115136365096,
+          0.049362681806087494,
+          0.04754901044070721
+        ]
+      },
+      "value": 0.1,
+      "variable": "T1"
+    }
+  ],
+  "S3.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.2,
+        "T2": 0.7
+      },
+      "description": "T1=0.2",
+      "group": "S3",
+      "last_round": {
+        "accuracy": 0.6849,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.03705881883700689,
+        "encryption": "fisher",
+        "encryption_time_s": 239.75636911392212,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8855324440364596
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S3.2",
+      "source_file": "S3.2.json",
+      "total_time_s": 29431.8189971447,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3607,
+          0.4793,
+          0.4329,
+          0.6849
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.0436626090357701,
+          0.04102437434097131,
+          0.03986938881377379,
+          0.0392352178071936,
+          0.03705881883700689
+        ]
+      },
+      "value": 0.2,
+      "variable": "T1"
+    }
+  ],
+  "S3.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.3,
+        "T2": 0.7
+      },
+      "description": "T1=0.3",
+      "group": "S3",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 179.38166761398315,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S3.3",
+      "source_file": "S3.3.json",
+      "total_time_s": 27184.51686167717,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 0.3,
+      "variable": "T1"
+    }
+  ],
+  "S3.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.4,
+        "T2": 0.7
+      },
+      "description": "T1=0.4",
+      "group": "S3",
+      "last_round": {
+        "accuracy": 0.5816,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.0009009874845408679,
+        "encryption": "fisher",
+        "encryption_time_s": 101.11139988899231,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.1230063898653924
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S3.4",
+      "source_file": "S3.4.json",
+      "total_time_s": 26914.396015644073,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.239,
+          0.2781,
+          0.4242,
+          0.5816
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.0061348486779024825,
+          0.0024535194834849486,
+          0.0016216629378201712,
+          0.0011258435600514833,
+          0.0009009874845408679
+        ]
+      },
+      "value": 0.4,
+      "variable": "T1"
+    }
+  ],
+  "S3.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.5,
+        "T2": 0.7
+      },
+      "description": "T1=0.5",
+      "group": "S3",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 0.0008101463317871094,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S3.5",
+      "source_file": "S3.5.json",
+      "total_time_s": 28222.353894233704,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 0.5,
+      "variable": "T1"
+    }
+  ],
+  "S4.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.3,
+        "T2": 0.5
+      },
+      "description": "T2=0.5",
+      "group": "S4",
+      "last_round": {
+        "accuracy": 0.6848,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.04264712600658337,
+        "encryption": "fisher",
+        "encryption_time_s": 167.45021724700928,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8880981802940369
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S4.1",
+      "source_file": "S4.1.json",
+      "total_time_s": 29178.984434366226,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3678,
+          0.4861,
+          0.4378,
+          0.6848
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.059156593804558115,
+          0.05256099551916123,
+          0.04967354784409205,
+          0.048088120482862,
+          0.04264712600658337
+        ]
+      },
+      "value": 0.5,
+      "variable": "T2"
+    }
+  ],
+  "S4.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.3,
+        "T2": 0.6
+      },
+      "description": "T2=0.6",
+      "group": "S4",
+      "last_round": {
+        "accuracy": 0.6869,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.02843139247658352,
+        "encryption": "fisher",
+        "encryption_time_s": 160.94954752922058,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8814497929585131
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S4.2",
+      "source_file": "S4.2.json",
+      "total_time_s": 29183.16692996025,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3577,
+          0.4758,
+          0.4314,
+          0.6869
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.039437712108095484,
+          0.03504065337280433,
+          0.03311567225803932,
+          0.03205873925859729,
+          0.02843139247658352
+        ]
+      },
+      "value": 0.6,
+      "variable": "T2"
+    }
+  ],
+  "S4.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.3,
+        "T2": 0.7
+      },
+      "description": "T2=0.7",
+      "group": "S4",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 271.0538818836212,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S4.3",
+      "source_file": "S4.3.json",
+      "total_time_s": 31014.66970515251,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 0.7,
+      "variable": "T2"
+    }
+  ],
+  "S4.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.3,
+        "T2": 0.8
+      },
+      "description": "T2=0.8",
+      "group": "S4",
+      "last_round": {
+        "accuracy": 0.6862,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.01705880437511951,
+        "encryption": "fisher",
+        "encryption_time_s": 274.81401777267456,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8813661955579927
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S4.4",
+      "source_file": "S4.4.json",
+      "total_time_s": 30622.644381523132,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3407,
+          0.4661,
+          0.424,
+          0.6862
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.023662612587213517,
+          0.02102436584730943,
+          0.019869395097096763,
+          0.019235218487059075,
+          0.01705880437511951
+        ]
+      },
+      "value": 0.8,
+      "variable": "T2"
+    }
+  ],
+  "S4.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "T1": 0.3,
+        "T2": 0.9
+      },
+      "description": "T2=0.9",
+      "group": "S4",
+      "last_round": {
+        "accuracy": 0.6847,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.014215667926085493,
+        "encryption": "fisher",
+        "encryption_time_s": 211.89723539352417,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8838544601126562
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S4.5",
+      "source_file": "S4.5.json",
+      "total_time_s": 27449.63036775589,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3349,
+          0.4643,
+          0.4224,
+          0.6847
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.019718827741841475,
+          0.01752029387280345,
+          0.0165578183097144,
+          0.016029342729598283,
+          0.014215667926085493
+        ]
+      },
+      "value": 0.9,
+      "variable": "T2"
+    }
+  ],
+  "S5.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 0.0
+      },
+      "description": "label_weight=0.0",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.6828,
+        "avg_leakscore": 0.763015854137251,
+        "avg_pct_encrypted": 0.30814402947823205,
+        "encryption": "fisher",
+        "encryption_time_s": 219.62844109535217,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8929438764535929
+      },
+      "leakscore_summary": {
+        "max": 0.7837011219621028,
+        "mean": 0.7781206191243749,
+        "min": 0.763015854137251,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.1",
+      "source_file": "S5.1.json",
+      "total_time_s": 26993.824986219406,
+      "trajectory": {
+        "accuracy": [
+          0.1126,
+          0.406,
+          0.5722,
+          0.4927,
+          0.6828
+        ],
+        "avg_leakscore": [
+          0.7783266522597247,
+          0.7837011219621028,
+          0.7828959231983474,
+          0.7826635440644483,
+          0.763015854137251
+        ],
+        "avg_pct_encrypted": [
+          0.33497992853323616,
+          0.3511033276716868,
+          0.3520015900333722,
+          0.3529752823213736,
+          0.30814402947823205
+        ]
+      },
+      "value": 0.0,
+      "variable": "label_weight"
+    }
+  ],
+  "S5.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 0.5
+      },
+      "description": "label_weight=0.5",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.6818,
+        "avg_leakscore": 0.511201503758241,
+        "avg_pct_encrypted": 0.0528003408263127,
+        "encryption": "fisher",
+        "encryption_time_s": 162.84783720970154,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8929314077654972
+      },
+      "leakscore_summary": {
+        "max": 0.538317744474343,
+        "mean": 0.5266073035922154,
+        "min": 0.511201503758241,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.2",
+      "source_file": "S5.2.json",
+      "total_time_s": 29276.48223590851,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3697,
+          0.4923,
+          0.4388,
+          0.6818
+        ],
+        "avg_leakscore": [
+          0.538317744474343,
+          0.5313151057316621,
+          0.5271967563261222,
+          0.5250054076707085,
+          0.511201503758241
+        ],
+        "avg_pct_encrypted": [
+          0.059579389666517574,
+          0.05782873344918092,
+          0.05679913721978665,
+          0.056251310060421625,
+          0.0528003408263127
+        ]
+      },
+      "value": 0.5,
+      "variable": "label_weight"
+    }
+  ],
+  "S5.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "label_weight=1.0",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 163.00494718551636,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.3",
+      "source_file": "S5.3.json",
+      "total_time_s": 27353.624170541763,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 1.0,
+      "variable": "label_weight"
+    }
+  ],
+  "S5.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 1.5
+      },
+      "description": "label_weight=1.5",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.6503,
+        "avg_leakscore": 0.30975002345503305,
+        "avg_pct_encrypted": 0.0039390325313434,
+        "encryption": "fisher",
+        "encryption_time_s": 165.22709965705872,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.9358298484283157
+      },
+      "leakscore_summary": {
+        "max": 0.3463106182460377,
+        "mean": 0.32539665116648775,
+        "min": 0.30975002345503305,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.4",
+      "source_file": "S5.4.json",
+      "total_time_s": 26726.277676820755,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3129,
+          0.4295,
+          0.4117,
+          0.6503
+        ],
+        "avg_leakscore": [
+          0.3463106182460377,
+          0.3294062927473094,
+          0.3226374228283419,
+          0.3188788985557165,
+          0.30975002345503305
+        ],
+        "avg_pct_encrypted": [
+          0.01157759438889722,
+          0.007351510558510199,
+          0.0059261671345060074,
+          0.005002624291228131,
+          0.0039390325313434
+        ]
+      },
+      "value": 1.5,
+      "variable": "label_weight"
+    }
+  ],
+  "S5.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 2.0
+      },
+      "description": "label_weight=2.0",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.259387153379231,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 0.000873565673828125,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.2983088366889613,
+        "mean": 0.27509398806005575,
+        "min": 0.259387153379231,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.5",
+      "source_file": "S5.5.json",
+      "total_time_s": 29446.923194885254,
+      "trajectory": {
+        "accuracy": [
+          0.1354,
+          0.1569,
+          0.3274,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.2983088366889613,
+          0.27892908950122125,
+          0.2714975894538968,
+          0.2673472712769686,
+          0.259387153379231
+        ],
+        "avg_pct_encrypted": [
+          0.0019507912181628247,
+          0.000245475445020323,
+          6.244875257834792e-05,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 2.0,
+      "variable": "label_weight"
+    }
+  ],
+  "S5.6": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 2.5
+      },
+      "description": "label_weight=2.5",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.22341367475365817,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 0.0008561611175537109,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.2640218498624783,
+        "mean": 0.2391635144126044,
+        "min": 0.22341367475365817,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.6",
+      "source_file": "S5.6.json",
+      "total_time_s": 29491.717883825302,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.2640218498624783,
+          0.24287394432544396,
+          0.2349691370435788,
+          0.23053896607786284,
+          0.22341367475365817
+        ],
+        "avg_pct_encrypted": [
+          0.00030285885247091453,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 2.5,
+      "variable": "label_weight"
+    }
+  ],
+  "S5.7": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 3.0
+      },
+      "description": "label_weight=3.0",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.19643356578447854,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 0.001001596450805664,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.23830660974261597,
+        "mean": 0.2122156591770159,
+        "min": 0.19643356578447854,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.7",
+      "source_file": "S5.7.json",
+      "total_time_s": 29294.370133161545,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.23830660974261597,
+          0.21583258544361097,
+          0.20757279773584042,
+          0.20293273717853358,
+          0.19643356578447854
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 3.0,
+      "variable": "label_weight"
+    }
+  ],
+  "S5.8": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 3.5
+      },
+      "description": "label_weight=3.5",
+      "group": "S5",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.1754490365862277,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 0.0007312297821044922,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.21830586742716743,
+        "mean": 0.19125621621600258,
+        "min": 0.1754490365862277,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S5.8",
+      "source_file": "S5.8.json",
+      "total_time_s": 26972.799541950226,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.21830586742716743,
+          0.19480041742440762,
+          0.18626453382982167,
+          0.18146122581238855,
+          0.1754490365862277
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 3.5,
+      "variable": "label_weight"
+    }
+  ],
+  "S6.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 0.0,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=0.0",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.007572803000221029,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 0.0009391307830810547,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.05829992890357971,
+        "mean": 0.02358067252789624,
+        "min": 0.007572803000221029,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.1",
+      "source_file": "S6.1.json",
+      "total_time_s": 27164.813757658005,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.05829992890357971,
+          0.026543073270780346,
+          0.015798422581671426,
+          0.00968913488322869,
+          0.007572803000221029
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 0.0,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S6.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 0.5,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=0.5",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.259387153379231,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 0.0007419586181640625,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.2983088366889613,
+        "mean": 0.27509398806005575,
+        "min": 0.259387153379231,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.2",
+      "source_file": "S6.2.json",
+      "total_time_s": 26537.709309577942,
+      "trajectory": {
+        "accuracy": [
+          0.1354,
+          0.1569,
+          0.3274,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.2983088366889613,
+          0.27892908950122125,
+          0.2714975894538968,
+          0.2673472712769686,
+          0.259387153379231
+        ],
+        "avg_pct_encrypted": [
+          0.0019507912181628247,
+          0.000245475445020323,
+          6.244875257834792e-05,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 0.5,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S6.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=1.0",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 178.71153712272644,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.3",
+      "source_file": "S6.3.json",
+      "total_time_s": 28264.433527231216,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 1.0,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S6.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.5,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=1.5",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.6838,
+        "avg_leakscore": 0.46083863368243905,
+        "avg_pct_encrypted": 0.040209605110188326,
+        "encryption": "fisher",
+        "encryption_time_s": 242.06815934181213,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.887524750413774
+      },
+      "leakscore_summary": {
+        "max": 0.4903159629172666,
+        "mean": 0.47630464048578336,
+        "min": 0.46083863368243905,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.4",
+      "source_file": "S6.4.json",
+      "total_time_s": 27756.63168311119,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3634,
+          0.4835,
+          0.4347,
+          0.6838
+        ],
+        "avg_leakscore": [
+          0.4903159629172666,
+          0.48083790248557395,
+          0.47605692295167706,
+          0.4734737803919605,
+          0.46083863368243905
+        ],
+        "avg_pct_encrypted": [
+          0.04757895780106385,
+          0.04520942804714044,
+          0.044014191317061586,
+          0.043368392375608286,
+          0.040209605110188326
+        ]
+      },
+      "value": 1.5,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S6.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 2.0,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=2.0",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.6818,
+        "avg_leakscore": 0.511201503758241,
+        "avg_pct_encrypted": 0.0528003408263127,
+        "encryption": "fisher",
+        "encryption_time_s": 163.08284759521484,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8929314077654972
+      },
+      "leakscore_summary": {
+        "max": 0.538317744474343,
+        "mean": 0.5266073035922154,
+        "min": 0.511201503758241,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.5",
+      "source_file": "S6.5.json",
+      "total_time_s": 27406.42600297928,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3697,
+          0.4923,
+          0.4388,
+          0.6818
+        ],
+        "avg_leakscore": [
+          0.538317744474343,
+          0.5313151057316621,
+          0.5271967563261222,
+          0.5250054076707085,
+          0.511201503758241
+        ],
+        "avg_pct_encrypted": [
+          0.059579389666517574,
+          0.05782873344918092,
+          0.05679913721978665,
+          0.056251310060421625,
+          0.0528003408263127
+        ]
+      },
+      "value": 2.0,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S6.6": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 2.5,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=2.5",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.6806,
+        "avg_leakscore": 0.5471749823838138,
+        "avg_pct_encrypted": 0.06179368905723095,
+        "encryption": "fisher",
+        "encryption_time_s": 236.3765127658844,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8959886182712603
+      },
+      "leakscore_summary": {
+        "max": 0.5726047313008262,
+        "mean": 0.5625377772396667,
+        "min": 0.5471749823838138,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.6",
+      "source_file": "S6.6.json",
+      "total_time_s": 27785.05886030197,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.373,
+          0.4986,
+          0.4425,
+          0.6806
+        ],
+        "avg_leakscore": [
+          0.5726047313008262,
+          0.5673702509074393,
+          0.5637252087364399,
+          0.5618137128698141,
+          0.5471749823838138
+        ],
+        "avg_pct_encrypted": [
+          0.06815114518006643,
+          0.06684251961608728,
+          0.06593125499784946,
+          0.0654533760001262,
+          0.06179368905723095
+        ]
+      },
+      "value": 2.5,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S6.7": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 3.0,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=3.0",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.6804,
+        "avg_leakscore": 0.5741550913529935,
+        "avg_pct_encrypted": 0.0685387215266625,
+        "encryption": "fisher",
+        "encryption_time_s": 236.66368055343628,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8983320631558382
+      },
+      "leakscore_summary": {
+        "max": 0.5983199714206884,
+        "mean": 0.5894856324752552,
+        "min": 0.5741550913529935,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.7",
+      "source_file": "S6.7.json",
+      "total_time_s": 27234.730004549026,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.375,
+          0.5018,
+          0.4442,
+          0.6804
+        ],
+        "avg_leakscore": [
+          0.5983199714206884,
+          0.5944116097892722,
+          0.5911215480441785,
+          0.5894199417691434,
+          0.5741550913529935
+        ],
+        "avg_pct_encrypted": [
+          0.07457993452747663,
+          0.07360284850001335,
+          0.07278034475942453,
+          0.07235493808984757,
+          0.0685387215266625
+        ]
+      },
+      "value": 3.0,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S6.8": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 3.5,
+        "label_weight": 1.0
+      },
+      "description": "entropy_weight=3.5",
+      "group": "S6",
+      "last_round": {
+        "accuracy": 0.6787,
+        "avg_leakscore": 0.5951396205512443,
+        "avg_pct_encrypted": 0.07378486407299836,
+        "encryption": "fisher",
+        "encryption_time_s": 214.98076748847961,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8997009343738798
+      },
+      "leakscore_summary": {
+        "max": 0.618320713736137,
+        "mean": 0.6104450754362685,
+        "min": 0.5951396205512443,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S6.8",
+      "source_file": "S6.8.json",
+      "total_time_s": 30809.932787895203,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3774,
+          0.5048,
+          0.4463,
+          0.6787
+        ],
+        "avg_leakscore": [
+          0.618320713736137,
+          0.6154437778084758,
+          0.6124298119501972,
+          0.6108914531352884,
+          0.5951396205512443
+        ],
+        "avg_pct_encrypted": [
+          0.07958012546102206,
+          0.07886089111367861,
+          0.07810740470886231,
+          0.07772281070550283,
+          0.07378486407299836
+        ]
+      },
+      "value": 3.5,
+      "variable": "entropy_weight"
+    }
+  ],
+  "S7.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.0,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=0.0",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 266.1248116493225,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.1",
+      "source_file": "S7.1.json",
+      "total_time_s": 30668.652727127075,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 0.0,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S7.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 0.5,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=0.5",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.6472,
+        "avg_leakscore": 0.3082354628549888,
+        "avg_pct_encrypted": 0.0036246737523470073,
+        "encryption": "fisher",
+        "encryption_time_s": 299.85867190361023,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.9439099280140067
+      },
+      "leakscore_summary": {
+        "max": 0.33632472902480437,
+        "mean": 0.321015335972805,
+        "min": 0.3082354628549888,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.2",
+      "source_file": "S7.2.json",
+      "total_time_s": 31090.365732192993,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3065,
+          0.4269,
+          0.4065,
+          0.6472
+        ],
+        "avg_leakscore": [
+          0.33632472902480437,
+          0.3240976780931534,
+          0.31947773831200765,
+          0.31694107157907075,
+          0.3082354628549888
+        ],
+        "avg_pct_encrypted": [
+          0.009081120928749442,
+          0.006024365680059418,
+          0.00515328402010103,
+          0.004539822153553056,
+          0.0036246737523470073
+        ]
+      },
+      "value": 0.5,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S7.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 1.0,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=1.0",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.25686288571249066,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 47.806647539138794,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.28106439981960285,
+        "mean": 0.26767153843712393,
+        "min": 0.25686288571249066,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.3",
+      "source_file": "S7.3.json",
+      "total_time_s": 29080.78379368782,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.28106439981960285,
+          0.27008139841096107,
+          0.2662314485933396,
+          0.2641175596492256,
+          0.25686288571249066
+        ],
+        "avg_pct_encrypted": [
+          0.00041875031747622414,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 1.0,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S7.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 1.5,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=1.5",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.2201681877535635,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 80.7194881439209,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.24207160875607076,
+        "mean": 0.22966460044253134,
+        "min": 0.2201681877535635,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.4",
+      "source_file": "S7.4.json",
+      "total_time_s": 28108.407670497894,
+      "trajectory": {
+        "accuracy": [
+          0.1176,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.24207160875607076,
+          0.23149834149510948,
+          0.22819838450857682,
+          0.22638647969933626,
+          0.2201681877535635
+        ],
+        "avg_pct_encrypted": [
+          0.0001439596836765607,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 1.5,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S7.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 2.0,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=2.0",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.192647164284368,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 65.72571277618408,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.20915664529082612,
+        "mean": 0.20042532291306775,
+        "min": 0.192647164284368,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.5",
+      "source_file": "S7.5.json",
+      "total_time_s": 28709.17109131813,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.20915664529082612,
+          0.2025610488082208,
+          0.1996735864450047,
+          0.19808816973691926,
+          0.192647164284368
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 2.0,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S7.6": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 2.5,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=2.5",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.17124192380832717,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 49.04946970939636,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.18866181867871315,
+        "mean": 0.17870480271787823,
+        "min": 0.17124192380832717,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.6",
+      "source_file": "S7.6.json",
+      "total_time_s": 28052.97885131836,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.18866181867871315,
+          0.1800542656073074,
+          0.17748763239555976,
+          0.17607837309948374,
+          0.17124192380832717
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 2.5,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S7.7": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 3.0,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=3.0",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.1541177314274944,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 60.90637516975403,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.16774586373586323,
+        "mean": 0.1604243678310947,
+        "min": 0.1541177314274944,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.7",
+      "source_file": "S7.7.json",
+      "total_time_s": 27667.36944127083,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.16774586373586323,
+          0.1620488390465767,
+          0.15973886915600383,
+          0.15847053578953538,
+          0.1541177314274944
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 3.0,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S7.8": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "empirical_weight": 3.5,
+        "entropy_weight": 1.0,
+        "label_weight": 1.0
+      },
+      "description": "empirical_weight=3.5",
+      "group": "S7",
+      "last_round": {
+        "accuracy": 0.46,
+        "avg_leakscore": 0.14010702857044946,
+        "avg_pct_encrypted": 0.0,
+        "encryption": "fisher",
+        "encryption_time_s": 62.78127646446228,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 1.6368331984628606
+      },
+      "leakscore_summary": {
+        "max": 0.15732713645065793,
+        "mean": 0.14729771811252299,
+        "min": 0.14010702857044946,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S7.8",
+      "source_file": "S7.8.json",
+      "total_time_s": 25896.909423828125,
+      "trajectory": {
+        "accuracy": [
+          0.0958,
+          0.1487,
+          0.2977,
+          0.4547,
+          0.46
+        ],
+        "avg_leakscore": [
+          0.15732713645065793,
+          0.14731712640597877,
+          0.14521715377818525,
+          0.1465201453573436,
+          0.14010702857044946
+        ],
+        "avg_pct_encrypted": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "value": 3.5,
+      "variable": "empirical_weight"
+    }
+  ],
+  "S8.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "client_batch_size": 1
+      },
+      "description": "client_batch_size=1",
+      "group": "S8",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 235.0372748374939,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S8.1",
+      "source_file": "S8.1.json",
+      "total_time_s": 28558.44109892845,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 1,
+      "variable": "client_batch_size"
+    }
+  ],
+  "S8.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "client_batch_size": 4
+      },
+      "description": "client_batch_size=4",
+      "group": "S8",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 230.1747305393219,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S8.2",
+      "source_file": "S8.2.json",
+      "total_time_s": 26538.798667907715,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 4,
+      "variable": "client_batch_size"
+    }
+  ],
+  "S8.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "client_batch_size": 8
+      },
+      "description": "client_batch_size=8",
+      "group": "S8",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 163.5628364086151,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S8.3",
+      "source_file": "S8.3.json",
+      "total_time_s": 26799.849447965622,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 8,
+      "variable": "client_batch_size"
+    }
+  ],
+  "S8.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "client_batch_size": 16
+      },
+      "description": "client_batch_size=16",
+      "group": "S8",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 286.3242127895355,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S8.4",
+      "source_file": "S8.4.json",
+      "total_time_s": 30813.851079940796,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 16,
+      "variable": "client_batch_size"
+    }
+  ],
+  "S8.5": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "client_batch_size": 32
+      },
+      "description": "client_batch_size=32",
+      "group": "S8",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 162.80175518989563,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S8.5",
+      "source_file": "S8.5.json",
+      "total_time_s": 28754.665825128555,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 32,
+      "variable": "client_batch_size"
+    }
+  ],
+  "S9.1": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "mi_samples_per_class": 5
+      },
+      "description": "mi_samples_per_class=5",
+      "group": "S9",
+      "last_round": {
+        "accuracy": 0.6805,
+        "avg_leakscore": 0.5333848411224145,
+        "avg_pct_encrypted": 0.05834617105623086,
+        "encryption": "fisher",
+        "encryption_time_s": 301.4318606853485,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8960290709628335
+      },
+      "leakscore_summary": {
+        "max": 0.6143629360902628,
+        "mean": 0.5605606455015651,
+        "min": 0.5333848411224145,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S9.1",
+      "source_file": "S9.1.json",
+      "total_time_s": 28598.202505350113,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3728,
+          0.497,
+          0.4392,
+          0.6805
+        ],
+        "avg_leakscore": [
+          0.6143629360902628,
+          0.5634063618377998,
+          0.55133835813486,
+          0.540310730322489,
+          0.5333848411224145
+        ],
+        "avg_pct_encrypted": [
+          0.0785906712214152,
+          0.06585153688987096,
+          0.06283454336225987,
+          0.060077649106582004,
+          0.05834617105623086
+        ]
+      },
+      "value": 5,
+      "variable": "mi_samples_per_class"
+    }
+  ],
+  "S9.2": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "mi_samples_per_class": 10
+      },
+      "description": "mi_samples_per_class=10",
+      "group": "S9",
+      "last_round": {
+        "accuracy": 0.6806,
+        "avg_leakscore": 0.5298378965875008,
+        "avg_pct_encrypted": 0.05745942195256551,
+        "encryption": "fisher",
+        "encryption_time_s": 311.9721722602844,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8954576804668088
+      },
+      "leakscore_summary": {
+        "max": 0.6143303659787802,
+        "mean": 0.5589746483151058,
+        "min": 0.5298378965875008,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S9.2",
+      "source_file": "S9.2.json",
+      "total_time_s": 28864.714198827744,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3722,
+          0.4967,
+          0.4394,
+          0.6806
+        ],
+        "avg_leakscore": [
+          0.6143303659787802,
+          0.5613831796917129,
+          0.5498091963602185,
+          0.5395126029573163,
+          0.5298378965875008
+        ],
+        "avg_pct_encrypted": [
+          0.07858252972364425,
+          0.0653457421809435,
+          0.062452267731229465,
+          0.05987811063726743,
+          0.05745942195256551
+        ]
+      },
+      "value": 10,
+      "variable": "mi_samples_per_class"
+    }
+  ],
+  "S9.3": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "mi_samples_per_class": 20
+      },
+      "description": "mi_samples_per_class=20",
+      "group": "S9",
+      "last_round": {
+        "accuracy": 0.6854,
+        "avg_leakscore": 0.385294328568736,
+        "avg_pct_encrypted": 0.021323540651549896,
+        "encryption": "fisher",
+        "encryption_time_s": 231.80411911010742,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8802731686000582
+      },
+      "leakscore_summary": {
+        "max": 0.41831329058165223,
+        "mean": 0.4008506458261355,
+        "min": 0.385294328568736,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S9.3",
+      "source_file": "S9.3.json",
+      "total_time_s": 29101.10988688469,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3477,
+          0.4701,
+          0.428,
+          0.6854
+        ],
+        "avg_leakscore": [
+          0.41831329058165223,
+          0.4051220976164416,
+          0.3993471728900094,
+          0.3961763394738385,
+          0.385294328568736
+        ],
+        "avg_pct_encrypted": [
+          0.029578276040653387,
+          0.026280469447374343,
+          0.024836755978564422,
+          0.024044040869921447,
+          0.021323540651549896
+        ]
+      },
+      "value": 20,
+      "variable": "mi_samples_per_class"
+    }
+  ],
+  "S9.4": [
+    {
+      "case": "sensitivity",
+      "config_overrides": {
+        "mi_samples_per_class": 40
+      },
+      "description": "mi_samples_per_class=40",
+      "group": "S9",
+      "last_round": {
+        "accuracy": 0.6807,
+        "avg_leakscore": 0.5294630109316931,
+        "avg_pct_encrypted": 0.057365698367357255,
+        "encryption": "fisher",
+        "encryption_time_s": 233.28260254859924,
+        "num_clients": 30,
+        "round": 249,
+        "test_loss": 0.8952965955191021
+      },
+      "leakscore_summary": {
+        "max": 0.6142898711837224,
+        "mean": 0.5583463519441746,
+        "min": 0.5294630109316931,
+        "n": 5
+      },
+      "n_sampled_rounds": 5,
+      "sampled_round_indices": [
+        0,
+        64,
+        128,
+        192,
+        249
+      ],
+      "scenario_id": "S9.4",
+      "source_file": "S9.4.json",
+      "total_time_s": 28608.874138832092,
+      "trajectory": {
+        "accuracy": [
+          0.1,
+          0.3722,
+          0.4968,
+          0.439,
+          0.6807
+        ],
+        "avg_leakscore": [
+          0.6142898711837224,
+          0.5615654573902767,
+          0.548799797643768,
+          0.5376136225714128,
+          0.5294630109316931
+        ],
+        "avg_pct_encrypted": [
+          0.07857240810990333,
+          0.06539130235711733,
+          0.062199904148777324,
+          0.059403364360332486,
+          0.057365698367357255
+        ]
+      },
+      "value": 40,
+      "variable": "mi_samples_per_class"
+    }
+  ]
+}

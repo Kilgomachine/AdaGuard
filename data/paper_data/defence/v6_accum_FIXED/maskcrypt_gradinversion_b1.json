@@ -1,0 +1,28 @@
+{
+  "attack": "gradinversion",
+  "n_iter": 20000,
+  "n_candidates": null,
+  "time_s": 359.51931405067444,
+  "gradient_score": 0.06284054689262031,
+  "label_recovery": {
+    "asr": 0.0,
+    "predicted": [
+      1
+    ],
+    "truth": [
+      6
+    ],
+    "source": "fc.bias",
+    "key_used": "fc.bias",
+    "signal": 4.556535259325756e-06
+  },
+  "defence_meta": {
+    "strategy": "maskcrypt",
+    "weights_encrypted": 1117396,
+    "pct_encrypted": 0.09999998210124574
+  },
+  "mse": 0.13665656745433807,
+  "psnr": 8.643694921041986,
+  "ssim": 0.03970486298203468,
+  "lpips": 0.22169601917266846
+}
