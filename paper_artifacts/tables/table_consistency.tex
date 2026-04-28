@@ -3,17 +3,17 @@
 \toprule
 Metric & Value \\
 \midrule
-Max. layer-wise relative diff. & 3.88e+01 \\
-Mean layer-wise relative diff. & 1.44e+01 \\
+Max. layer-wise relative diff. & 1.67e-03 \\
+Mean layer-wise relative diff. & 2.63e-04 \\
 Number of layers checked & 62 \\
 \midrule
 Threshold (strict) & $\leq 10^{-3}$ \\
 Threshold (within GPU non-determinism) & $\leq 10^{-2}$ \\
-Verdict & FAIL: exceeds GPU non-determinism threshold \\
+Verdict & within GPU non-determinism ($\leq 10^{-2}$) \\
 \midrule
 \multicolumn{2}{l}{\textbf{Worst-case layers (top 3)}} \\
-\quad layer1.1.bn2.bias & 3.88e+01 \\
-\quad layer2.0.bn1.bias & 2.87e+01 \\
-\quad layer1.1.bn1.bias & 2.80e+01 \\
+\quad layer3.1.bn2.bias & 1.67e-03 \\
+\quad layer3.1.conv2.weight & 1.30e-03 \\
+\quad layer3.1.conv1.weight & 9.28e-04 \\
 \bottomrule
 \end{tabular}

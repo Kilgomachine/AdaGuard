@@ -40,10 +40,27 @@ _FILENAME_RE = re.compile(
 
 
 def load_defence_sweep(data_dir: Path | None = None):
-    """Return {(defence, attack, batch): metrics_dict} parsed from filenames."""
+    """Return {(defence, attack, batch): metrics_dict} parsed from filenames.
+
+    Backwards-compat single-seed loader. If per-seed subdirectories exist
+    under ``data_dir`` (``seed42/``, ``seed123/`` ...), prefers ``seed42/``
+    so the flat-file callers keep their original behaviour. If no per-seed
+    subdir is present, falls back to the flat ``data_dir`` itself.
+    """
     data_dir = data_dir or (DATA_DIR / "defence")
+    seed_dirs = sorted(p for p in data_dir.glob("seed*") if p.is_dir())
+    seed42_dir = next((p for p in seed_dirs if p.name == "seed42"), None)
+    if seed42_dir is not None:
+        # Explicit seed42/ subdir present — use it.
+        scan_dir = seed42_dir
+    else:
+        # No seed42/ subdir; flat root is treated AS seed42 (the original
+        # single-seed layout). Do NOT fall back to a different seed's subdir
+        # — that would silently swap in seed123 or seed456 numbers and
+        # mis-label them as the canonical single-seed reference.
+        scan_dir = data_dir
     out = {}
-    for p in sorted(data_dir.glob("*.json")):
+    for p in sorted(scan_dir.glob("*.json")):
         m = _FILENAME_RE.match(p.name)
         if not m:
             continue
@@ -51,6 +68,105 @@ def load_defence_sweep(data_dir: Path | None = None):
         with p.open() as f:
             out[key] = json.load(f)
     return out
+
+
+def load_defence_sweep_multiseed(data_dir: Path | None = None):
+    """Return {(defence, attack, batch): {seed: metrics_dict, ...}}.
+
+    Scans both per-seed subdirectories (``seed42/``, ``seed123/`` ...) and
+    the flat ``data_dir`` root (treated as ``seed42`` if no ``seed42/``
+    subdir is present, for backwards compat with the single-seed layout).
+    """
+    data_dir = data_dir or (DATA_DIR / "defence")
+    out: dict = {}
+
+    seed_dirs = sorted(p for p in data_dir.glob("seed*") if p.is_dir())
+    has_seed42_subdir = any(p.name == "seed42" for p in seed_dirs)
+
+    # Per-seed subdirectories (if any).
+    for sd in seed_dirs:
+        seed = sd.name.replace("seed", "")
+        for p in sorted(sd.glob("*.json")):
+            m = _FILENAME_RE.match(p.name)
+            if not m:
+                continue
+            key = (m.group("defence"), m.group("attack"), int(m.group("batch")))
+            with p.open() as f:
+                out.setdefault(key, {})[seed] = json.load(f)
+
+    # Flat root files (treated as seed42 only if there isn't already a seed42/).
+    if not has_seed42_subdir:
+        for p in sorted(data_dir.glob("*.json")):
+            m = _FILENAME_RE.match(p.name)
+            if not m:
+                continue
+            key = (m.group("defence"), m.group("attack"), int(m.group("batch")))
+            with p.open() as f:
+                out.setdefault(key, {})["42"] = json.load(f)
+
+    return out
+
+
+def aggregate_multiseed(multiseed_sweep, metrics=("psnr", "lpips", "ssim", "mse")):
+    """Reduce a multi-seed sweep to per-cell summary statistics.
+
+    Returns ``{(defence, attack, batch): {metric: {mean, std, n, values}}}``
+    for the listed scalar metrics, plus a special ``"asr"`` metric pulled
+    from ``label_recovery.asr`` (averaged across seeds).
+    """
+    import statistics as st
+
+    summary: dict = {}
+    for key, by_seed in multiseed_sweep.items():
+        cell: dict = {}
+        for metric in metrics:
+            vals = []
+            for seed, m in by_seed.items():
+                v = m.get(metric)
+                if v is None:
+                    continue
+                try:
+                    vals.append(float(v))
+                except (TypeError, ValueError):
+                    continue
+            if not vals:
+                cell[metric] = {"mean": None, "std": None, "n": 0,
+                                "values": {}}
+                continue
+            cell[metric] = {
+                "mean": st.mean(vals),
+                "std": st.stdev(vals) if len(vals) > 1 else 0.0,
+                "n": len(vals),
+                "values": {seed: float(by_seed[seed][metric])
+                           for seed in by_seed
+                           if by_seed[seed].get(metric) is not None},
+            }
+        # ASR is nested.
+        asr_vals = []
+        for seed, m in by_seed.items():
+            lr = m.get("label_recovery") or {}
+            v = lr.get("asr")
+            if v is None:
+                continue
+            try:
+                asr_vals.append(float(v))
+            except (TypeError, ValueError):
+                continue
+        if asr_vals:
+            cell["asr"] = {
+                "mean": st.mean(asr_vals),
+                "std": st.stdev(asr_vals) if len(asr_vals) > 1 else 0.0,
+                "n": len(asr_vals),
+                "values": {
+                    seed: float((by_seed[seed].get("label_recovery") or {}).get("asr"))
+                    for seed in by_seed
+                    if (by_seed[seed].get("label_recovery") or {}).get("asr") is not None
+                },
+            }
+        else:
+            cell["asr"] = {"mean": None, "std": None, "n": 0, "values": {}}
+        summary[key] = cell
+    return summary
 
 
 def load_consistency(path: Path | None = None):
