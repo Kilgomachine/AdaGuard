@@ -436,6 +436,21 @@ def main():
                          'selector that exposed fc.bias on seed 456 round 249 '
                          'and produced label ASR=1.0. Default behaviour ENABLES '
                          'the guarantee (the post-fix AdaGuard-Fisher).')
+    ap.add_argument('--fisher-mask-mode', default='fisher',
+                    choices=['fisher', 'random'],
+                    help="Mask-selection mode for the Fisher defence path. "
+                         "'fisher' (default) selects top-K parameters by "
+                         "per-weight Fisher score (the AdaGuard headline). "
+                         "'random' selects K parameters uniformly at random "
+                         "without replacement, used as the Fisher-vs-random "
+                         "ablation baseline that isolates the contribution "
+                         "of vulnerability-ranked targeting from the "
+                         "encryption budget itself. Only takes effect when "
+                         "--defence=fisher.")
+    ap.add_argument('--fisher-random-seed', type=int, default=42,
+                    help="Seed for the per-call random permutation when "
+                         "--fisher-mask-mode=random. Default 42 for "
+                         "reproducibility of the ablation.")
     ap.add_argument('--check-consistency', action='store_true',
                     help='Before running the attack, reconstruct the local '
                          'model (global - weight_delta), recompute the '
@@ -620,12 +635,17 @@ def main():
             fisher_metric = FisherInformationMetric(
                 enc_pct=args.defence_pct,
                 mandatory_layer_substrings=mandatory,
+                mask_mode=args.fisher_mask_mode,
+                random_seed=args.fisher_random_seed,
             )
             enc = FisherEncryptor(fisher_metric=fisher_metric)
             gd, meta = enc.encrypt(gd_cpu, k=k_enc)
             guard_state = ('DISABLED (ablation)'
                            if args.no_classifier_head_guarantee else 'ENABLED')
-            print(f"\n[defence=fisher] encrypted "
+            mode_label = (f"random (seed={args.fisher_random_seed})"
+                          if args.fisher_mask_mode == 'random'
+                          else 'fisher')
+            print(f"\n[defence=fisher mask_mode={mode_label}] encrypted "
                   f"{meta['weights_encrypted']}/{total} params "
                   f"({meta['pct_encrypted']*100:.1f}%); "
                   f"classifier-head guarantee {guard_state}; "
@@ -633,6 +653,10 @@ def main():
                   f"in {meta['classifier_head_forced_layers']}")
             defence_meta = {
                 'strategy': 'fisher',
+                'mask_mode': args.fisher_mask_mode,
+                'random_seed': (args.fisher_random_seed
+                                if args.fisher_mask_mode == 'random'
+                                else None),
                 'weights_encrypted': int(meta['weights_encrypted']),
                 'pct_encrypted': float(meta['pct_encrypted']),
                 'encryption_threshold': float(meta['encryption_threshold']),

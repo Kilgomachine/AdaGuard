@@ -963,7 +963,7 @@ with tab_arch:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("#### LeakScore Formula")
-        st.latex(r"\text{LeakScore}_{final} = \frac{\alpha \cdot S_{entropy} + \beta \cdot S_{label} + \gamma \cdot S_{empirical}}{\alpha + \beta + \gamma}")
+        st.latex(r"\text{LeakScore}_{final} = \frac{\alpha \cdot S_{label} + \beta \cdot S_{entropy} + \gamma \cdot S_{empirical}}{\alpha + \beta + \gamma}")
         st.markdown("#### Entropy LeakScore")
         st.latex(r"H_{Shannon} = -\sum_j p_j \log(p_j)")
         st.latex(r"S_{entropy} = 1 - \frac{H}{\log(B)}")

@@ -163,6 +163,133 @@ def test_pct_encrypted_reflects_merged_mask():
     assert abs(result["pct_encrypted"] - expected_count / n_total) < 1e-6
 
 
+# ---------------------------------------------------------------------------
+# Fisher-vs-random ablation (added 2026-04-29).
+#
+# These tests lock in the contract that ``mask_mode='random'`` selects K
+# parameters uniformly at random at the same budget as Fisher mode, that
+# the classifier-head guarantee fires identically in both modes, and that
+# the random mask is reproducible given a seed.
+# ---------------------------------------------------------------------------
+
+def test_random_mode_respects_budget():
+    """Random mode must encrypt the same K parameters as Fisher mode.
+
+    The point of the ablation is to vary *which* K, not *how many* K.
+    """
+    gd = _adversarial_grad_dict()
+    n_total = sum(g.numel() for g in gd.values())
+    enc_pct = 0.10
+    fisher = FisherInformationMetric(
+        enc_pct=enc_pct,
+        mask_mode="fisher",
+        mandatory_layer_substrings=(),  # disable head guarantee for clean count
+    ).compute(gd)
+    rand = FisherInformationMetric(
+        enc_pct=enc_pct,
+        mask_mode="random",
+        random_seed=0,
+        mandatory_layer_substrings=(),
+    ).compute(gd)
+    expected_k = max(1, int(enc_pct * n_total))
+    assert fisher["weights_to_encrypt"] == expected_k
+    assert rand["weights_to_encrypt"] == expected_k
+
+
+def test_random_mode_is_reproducible_with_seed():
+    """Same random_seed must give the same mask across calls."""
+    gd = _adversarial_grad_dict()
+    a = FisherInformationMetric(
+        enc_pct=0.10, mask_mode="random", random_seed=123,
+        mandatory_layer_substrings=(),
+    ).compute(gd)
+    b = FisherInformationMetric(
+        enc_pct=0.10, mask_mode="random", random_seed=123,
+        mandatory_layer_substrings=(),
+    ).compute(gd)
+    assert torch.equal(a["encrypt_mask"], b["encrypt_mask"]), (
+        "Random mask is not reproducible under the same seed — "
+        "the ablation will not be repeatable across re-runs."
+    )
+
+
+def test_random_mode_differs_from_fisher_mode():
+    """Random and Fisher masks should not coincide on the adversarial fixture.
+
+    On a fixture where conv-layer scores dominate (5000-element
+    layer1.0.conv1.weight ~ 1.0 vs 60 head-element scores ~ 0.0025),
+    Fisher will pick almost entirely from the conv layer; a uniform-random
+    selection will pick ~10% from each layer. The masks must differ.
+    """
+    gd = _adversarial_grad_dict()
+    fisher = FisherInformationMetric(
+        enc_pct=0.10, mask_mode="fisher",
+        mandatory_layer_substrings=(),
+    ).compute(gd)
+    rand = FisherInformationMetric(
+        enc_pct=0.10, mask_mode="random", random_seed=0,
+        mandatory_layer_substrings=(),
+    ).compute(gd)
+    overlap = int((fisher["encrypt_mask"] & rand["encrypt_mask"]).sum().item())
+    expected_random = fisher["encrypt_mask"].sum().item()
+    # Fewer than 80% of the Fisher selections should be reproduced by the
+    # random selector on a fixture this skewed; otherwise the random branch
+    # is suspiciously biased toward the Fisher ranking.
+    assert overlap < 0.8 * expected_random, (
+        f"Random mask overlaps {overlap}/{expected_random} positions with "
+        f"the Fisher mask on the adversarial fixture; the random branch "
+        f"may not be sampling uniformly."
+    )
+
+
+def test_random_mode_preserves_classifier_head_guarantee():
+    """Head guarantee must fire in random mode just like in Fisher mode."""
+    gd = _adversarial_grad_dict()
+    rand = FisherInformationMetric(
+        enc_pct=0.10, mask_mode="random", random_seed=0,
+    ).compute(gd)  # default mandatory_layer_substrings = post-fix
+    assert _is_layer_fully_encrypted(rand, gd, "fc.bias")
+    assert _is_layer_fully_encrypted(rand, gd, "fc.weight")
+    assert "fc.bias" in rand["classifier_head_forced_layers"]
+
+
+def test_random_mode_diagnostic_field():
+    """The metric result and encryptor metadata must surface mask_mode.
+
+    Downstream JSON sweeps need to distinguish Fisher and random cells
+    without re-deriving from scenario metadata.
+    """
+    gd = _adversarial_grad_dict()
+    f_result = FisherInformationMetric(
+        enc_pct=0.10, mask_mode="fisher",
+    ).compute(gd)
+    r_result = FisherInformationMetric(
+        enc_pct=0.10, mask_mode="random", random_seed=0,
+    ).compute(gd)
+    assert f_result["mask_mode"] == "fisher"
+    assert r_result["mask_mode"] == "random"
+
+    enc_random = FisherEncryptor(
+        fisher_metric=FisherInformationMetric(
+            enc_pct=0.10, mask_mode="random", random_seed=0,
+        ),
+    )
+    _, meta = enc_random.encrypt(
+        gd, k=int(0.10 * sum(g.numel() for g in gd.values())),
+    )
+    assert meta["mask_mode"] == "random"
+
+
+def test_random_mode_rejects_unknown_mode():
+    """Unknown mask_mode must raise loudly, not silently default."""
+    try:
+        FisherInformationMetric(enc_pct=0.10, mask_mode="not_a_mode")
+    except ValueError as e:
+        assert "mask_mode" in str(e)
+    else:
+        raise AssertionError("Expected ValueError for invalid mask_mode")
+
+
 if __name__ == "__main__":
     # Run inline so this file works without pytest installed on HPC.
     import traceback

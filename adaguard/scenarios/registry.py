@@ -266,6 +266,27 @@ VIABILITY_SCENARIOS = {
             'num_clients': 100, 'clients_per_round': 50,
         },
     },
+
+    # -- Fisher-vs-random ablation (added 2026-04-29 in response to
+    # reviewer ask; isolates vulnerability-ranked targeting from the
+    # encryption budget at fixed rho=0.10). Pairs with V6 (default
+    # AdaGuard, Fisher mask) for the head-to-head comparison.
+    'V13': {
+        'id': 'V13',
+        'case': 'viability',
+        'group': 'adaguard',
+        'name': 'adaguard_random_10',
+        'description': 'AdaGuard with uniform-random mask at rho=0.10 (Fisher-vs-random ablation; pairs with V6)',
+        'config_overrides': {
+            'encryption': 'fisher',
+            'encryption_top_percent': 0.10,
+            'fisher_mask_mode': 'random',
+            'fisher_random_seed': 42,
+            'T1': 0.3, 'T2': 0.7,
+            'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+            'grad_accum_enabled': False,
+        },
+    },
 }
 
 

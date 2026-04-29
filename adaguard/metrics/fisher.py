@@ -52,15 +52,28 @@ class FisherInformationMetric:
     topk : int
         Number of (rank, value) pairs to return for diagnostics.
     enc_pct : float
-        Fraction of parameters to encrypt (top-K by Fisher score).
+        Fraction of parameters to encrypt.
     mandatory_layer_substrings : tuple[str, ...] | None
         Layers whose name contains any of these substrings are
         force-included in the encrypted set regardless of Fisher score.
         Pass ``()`` to disable (reproduces pre-fix behaviour). Pass
         ``None`` to use :data:`DEFAULT_MANDATORY_LAYER_SUBSTRINGS`.
+    mask_mode : {'fisher', 'random'}
+        How to select the encrypted set at the configured ``enc_pct`` budget.
+        ``'fisher'`` (default) selects the top-K parameters by per-weight
+        Fisher score. ``'random'`` selects K parameters uniformly at random
+        without replacement; used as the ablation baseline that isolates the
+        contribution of vulnerability-ranked targeting from the encryption
+        budget itself. The classifier-head guarantee fires identically in
+        both modes — it is orthogonal to the ranking principle.
+    random_seed : int | None
+        Seed for the per-call random permutation when ``mask_mode='random'``.
+        Set explicitly when running the Fisher-vs-random ablation so the
+        ablation is reproducible. Has no effect when ``mask_mode='fisher'``.
     """
 
-    def __init__(self, topk=50, enc_pct=0.1, mandatory_layer_substrings=None):
+    def __init__(self, topk=50, enc_pct=0.1, mandatory_layer_substrings=None,
+                 mask_mode='fisher', random_seed=None):
         self.topk = topk
         self.enc_pct = enc_pct
         self.mandatory_layer_substrings = (
@@ -68,6 +81,12 @@ class FisherInformationMetric:
             if mandatory_layer_substrings is None
             else tuple(mandatory_layer_substrings)
         )
+        if mask_mode not in ('fisher', 'random'):
+            raise ValueError(
+                f"mask_mode must be 'fisher' or 'random', got {mask_mode!r}"
+            )
+        self.mask_mode = mask_mode
+        self.random_seed = random_seed
 
     def compute(self, gradient_dict):
         per_layer = {}
@@ -113,10 +132,23 @@ class FisherInformationMetric:
         # Top-k weights
         topk_vals, topk_idx = torch.topk(fi_all, min(self.topk, n))
 
-        # Encryption threshold: top enc_pct% of weights
+        # Encryption mask. The Fisher-vs-random ablation switches between
+        # vulnerability-ranked selection and a budget-matched uniform-random
+        # mask without touching anything else in this method, so the
+        # diagnostic dict (Gini, top-K stats, fisher_total, ...) stays
+        # interpretable in both modes.
         k_enc = max(1, int(self.enc_pct * n))
-        threshold = torch.topk(fi_all, k_enc)[0][-1].item()
-        mask_encrypt = fi_all >= threshold
+        if self.mask_mode == 'fisher':
+            threshold = torch.topk(fi_all, k_enc)[0][-1].item()
+            mask_encrypt = fi_all >= threshold
+        else:  # 'random' — validated in __init__
+            gen = torch.Generator()
+            if self.random_seed is not None:
+                gen.manual_seed(int(self.random_seed))
+            perm = torch.randperm(n, generator=gen)
+            mask_encrypt = torch.zeros(n, dtype=torch.bool)
+            mask_encrypt[perm[:k_enc]] = True
+            threshold = 0.0  # not meaningful in random mode
 
         # Classifier-head guarantee. Force-include any parameter whose
         # owning layer name matches a mandatory substring (e.g. fc.bias).
@@ -163,6 +195,10 @@ class FisherInformationMetric:
             # report whether the guarantee actually fired for this round.
             'classifier_head_forced_count': n_forced,
             'classifier_head_forced_layers': forced_layers,
+            # Mask-mode diagnostic so downstream JSONs can distinguish the
+            # Fisher and random ablation cells without re-deriving from
+            # scenario metadata.
+            'mask_mode': self.mask_mode,
         }
 
     def compute_with_dynamic_k(self, gradient_dict, encrypt_pct):
@@ -191,4 +227,5 @@ class FisherInformationMetric:
             'param_names': [],
             'classifier_head_forced_count': 0,
             'classifier_head_forced_layers': [],
+            'mask_mode': self.mask_mode,
         }

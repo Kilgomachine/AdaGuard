@@ -5,7 +5,7 @@
 The final LeakScore is a weighted average of three component scores:
 
 ```
-LeakScore = (alpha * Entropy + beta * Label + gamma * Empirical) / (alpha + beta + gamma)
+LeakScore = (alpha * Label + beta * Entropy + gamma * Empirical) / (alpha + beta + gamma)
 ```
 
 - Default weights: alpha = beta = gamma = 1.0

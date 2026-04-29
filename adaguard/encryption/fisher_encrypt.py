@@ -18,10 +18,29 @@ class FisherEncryptor:
     In a real system, 'encryption' would use homomorphic encryption
     or secure aggregation. Here we simulate by masking (zeroing)
     the encrypted parameters from the adversary's view.
+
+    Supports two mask-selection modes via the underlying
+    :class:`FisherInformationMetric`:
+
+    - ``'fisher'`` (default): top-K parameters by per-weight Fisher score.
+    - ``'random'``: uniform random selection at the same K — the
+      Fisher-vs-random ablation that isolates the contribution of
+      vulnerability-ranked targeting from the encryption budget itself.
+
+    The classifier-head guarantee fires identically in both modes.
     """
 
-    def __init__(self, fisher_metric=None, topk=50):
-        self.fisher_metric = fisher_metric or FisherInformationMetric(topk=topk)
+    def __init__(self, fisher_metric=None, topk=50, mask_mode='fisher',
+                 random_seed=None):
+        # If a metric is passed in, respect its already-configured mask_mode.
+        # Otherwise build one with the requested mask_mode/random_seed.
+        if fisher_metric is None:
+            fisher_metric = FisherInformationMetric(
+                topk=topk,
+                mask_mode=mask_mode,
+                random_seed=random_seed,
+            )
+        self.fisher_metric = fisher_metric
 
     def encrypt(self, gradient_dict, k=None, fisher_result=None):
         """Encrypt top-k parameters by Fisher score.
@@ -59,6 +78,10 @@ class FisherEncryptor:
 
         metadata = {
             'strategy': 'fisher',
+            # 'fisher' or 'random' — surfaces the ablation cell so downstream
+            # JSON sweep summaries can distinguish without re-deriving from
+            # scenario metadata.
+            'mask_mode': fisher_result.get('mask_mode', 'fisher'),
             'weights_encrypted': fisher_result['weights_to_encrypt'],
             'pct_encrypted': fisher_result['pct_encrypted'],
             'encryption_threshold': fisher_result['encryption_threshold'],

@@ -55,14 +55,17 @@ class CombinedLeakScore:
         if empirical_weight is not None:
             self.empirical_weight = empirical_weight
 
-    # Backward compat aliases
+    # Backward compat aliases. Convention: alpha=label, beta=entropy,
+    # gamma=empirical, matching the LeakScore equation in the paper
+    # (sec. IV.B), the sensitivity table (S4-S6), and the scenario
+    # registry comments.
     @property
     def alpha(self):
-        return self.entropy_weight
+        return self.label_weight
 
     @property
     def beta(self):
-        return self.label_weight
+        return self.entropy_weight
 
     @property
     def gamma(self):

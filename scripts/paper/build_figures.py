@@ -297,6 +297,89 @@ def fig_b1_vs_b4_diverse(sweep):
     _savefig(fig, "fig_b1_vs_b4_diverse")
 
 
+# --------------------------------------------------------------------------
+# Figure 6: LeakScore trajectory across training rounds (added 2026-04-29
+# to address the reviewer ask "show that T1=0.3 and T2=0.7 are sensible
+# choices across all 250 rounds, not just round 249"). Uses per-round
+# combined_leakscore values that the simulator already saves into the
+# Phase-1 training JSONs at data/paper_data/training/.
+# --------------------------------------------------------------------------
+
+def fig_leakscore_trajectory():
+    """Mean ± std across seeds of the V4 (Fisher) per-round LeakScore.
+
+    Pulls combined_leakscore from
+    data/paper_data/training/fisher_seed{42,123,456}_300clients.json,
+    averages across seeds, and overlays T1 and T2 thresholds plus the
+    round-249 replay-snapshot marker.
+    """
+    import json
+    train_dir = REPO_ROOT / "data" / "paper_data" / "training"
+    seeds = [42, 123, 456]
+    trajectories = []
+    for seed in seeds:
+        p = train_dir / f"fisher_seed{seed}_300clients.json"
+        if not p.exists():
+            print(f"skip fig_leakscore_trajectory: missing {p.name}")
+            return
+        with p.open() as f:
+            obj = json.load(f)
+        rounds = obj.get("rounds", [])
+        ls = [r.get("combined_leakscore") for r in rounds]
+        if not ls or any(v is None for v in ls):
+            print(f"skip fig_leakscore_trajectory: incomplete LeakScore in {p.name}")
+            return
+        trajectories.append(np.asarray(ls, dtype=np.float64))
+
+    # Align lengths defensively in case a seed crashed early.
+    min_len = min(len(t) for t in trajectories)
+    arr = np.stack([t[:min_len] for t in trajectories], axis=0)
+    rounds_x = np.arange(1, min_len + 1)
+    mean = arr.mean(axis=0)
+    std = arr.std(axis=0, ddof=0)
+
+    fig, ax = plt.subplots(figsize=(6.5, 3.2))
+
+    # Per-seed light traces in the background (visual honesty signal).
+    for i, seed in enumerate(seeds):
+        ax.plot(rounds_x, arr[i], color="#009E73", alpha=0.25, linewidth=0.8,
+                label=f"seed {seed}" if i == 0 else None)
+
+    # Mean trajectory + std band.
+    ax.plot(rounds_x, mean, color="#009E73", linewidth=1.6,
+            label="V4 LeakScore mean (n=3 seeds)")
+    ax.fill_between(rounds_x, mean - std, mean + std,
+                    color="#009E73", alpha=0.20, linewidth=0,
+                    label="$\\pm$1 sample-std band")
+
+    # Threshold horizontal lines.
+    ax.axhline(0.3, color="#0072B2", linestyle="--", linewidth=1.0,
+               label="$T_1 = 0.3$ (encryption fires)")
+    ax.axhline(0.7, color="#D55E00", linestyle="--", linewidth=1.0,
+               label="$T_2 = 0.7$ (gradient accum fires)")
+
+    # Replay-snapshot marker at round 249.
+    if min_len >= 249:
+        ax.axvline(249, color="black", linestyle=":", linewidth=0.9, alpha=0.5)
+        ls_249 = mean[248]
+        ax.annotate(
+            f"round 249\n(replay snapshot)\nLeakScore $\\approx$ {ls_249:.3f}",
+            xy=(249, ls_249), xytext=(180, ls_249 + 0.18),
+            fontsize=7, ha="left", va="bottom",
+            arrowprops=dict(arrowstyle="-", color="black",
+                            linewidth=0.6, alpha=0.5),
+        )
+
+    ax.set_xlabel("Communication round")
+    ax.set_ylabel("LeakScore (combined)")
+    ax.set_xlim(0, min_len + 5)
+    ax.set_ylim(0, max(1.0, float(arr.max()) + 0.05))
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.22),
+              fontsize=7.5, frameon=False, ncol=3)
+
+    _savefig(fig, "fig_leakscore_trajectory")
+
+
 def main():
     sweep = load_defence_sweep()
     diversity = load_client_diversity()
@@ -306,6 +389,7 @@ def main():
     fig_asr_collapse(sweep)
     fig_client_diversity(diversity)
     fig_b1_vs_b4_diverse(sweep)
+    fig_leakscore_trajectory()
 
 
 if __name__ == "__main__":
