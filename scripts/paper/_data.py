@@ -179,6 +179,113 @@ def load_consistency(path: Path | None = None):
     return blob.get("consistency", blob)
 
 
+# --------------------------------------------------------------------------
+# V13 (Fisher-vs-random ablation): loader and aggregator.
+#
+# The V13 viability scenario reuses the V4 (Fisher) defence path with
+# ``mask_mode='random'`` flipped on, holding rho=10% fixed. JSON layout
+# under data/paper_data/defence/v13_random/ is FLAT (no per-seed subdir);
+# the seed is encoded in the filename:
+#    fisher_random_<attack>_b<B>_seed<seed>.json
+# --------------------------------------------------------------------------
+
+_V13_FILENAME_RE = re.compile(
+    r"^fisher_random"
+    r"_(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_b(?P<batch>\d+)"
+    r"_seed(?P<seed>\d+)\.json$"
+)
+
+
+def load_v13_random_sweep(data_dir: Path | None = None):
+    """Return ``{(attack, batch): {seed: metrics_dict}}`` for the V13 ablation.
+
+    Reads the Fisher-vs-random ablation JSONs from
+    ``data/paper_data/defence/v13_random/``. Each JSON has the same metric
+    schema as the regular defence sweep (psnr, lpips, ssim, mse,
+    label_recovery.asr) plus a ``defence_meta.mask_mode='random'`` field
+    we record for traceability.
+
+    Returns an empty dict if the directory does not exist — callers should
+    skip emitting the comparison table in that case rather than raising.
+    """
+    data_dir = data_dir or (DATA_DIR / "defence" / "v13_random")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    for p in sorted(data_dir.glob("*.json")):
+        m = _V13_FILENAME_RE.match(p.name)
+        if not m:
+            continue
+        key = (m.group("attack"), int(m.group("batch")))
+        seed = m.group("seed")
+        with p.open() as f:
+            out.setdefault(key, {})[seed] = json.load(f)
+    return out
+
+
+def aggregate_v13(v13_sweep, metrics=("psnr", "lpips", "ssim", "mse")):
+    """Reduce a V13 sweep to ``{(attack, batch): {metric: {mean, std, n, values}}}``.
+
+    Mirrors :func:`aggregate_multiseed` but keyed by ``(attack, batch)``
+    rather than ``(defence, attack, batch)`` since V13 is a single-defence
+    ablation. Pulls ``label_recovery.asr`` into a synthetic ``"asr"`` metric
+    just like the multi-seed aggregator.
+    """
+    import statistics as st
+
+    summary: dict = {}
+    for key, by_seed in v13_sweep.items():
+        cell: dict = {}
+        for metric in metrics:
+            vals = []
+            for seed, m in by_seed.items():
+                v = m.get(metric)
+                if v is None:
+                    continue
+                try:
+                    vals.append(float(v))
+                except (TypeError, ValueError):
+                    continue
+            if not vals:
+                cell[metric] = {"mean": None, "std": None, "n": 0,
+                                "values": {}}
+                continue
+            cell[metric] = {
+                "mean": st.mean(vals),
+                "std": st.stdev(vals) if len(vals) > 1 else 0.0,
+                "n": len(vals),
+                "values": {seed: float(by_seed[seed][metric])
+                           for seed in by_seed
+                           if by_seed[seed].get(metric) is not None},
+            }
+        asr_vals = []
+        for seed, m in by_seed.items():
+            lr = m.get("label_recovery") or {}
+            v = lr.get("asr")
+            if v is None:
+                continue
+            try:
+                asr_vals.append(float(v))
+            except (TypeError, ValueError):
+                continue
+        if asr_vals:
+            cell["asr"] = {
+                "mean": st.mean(asr_vals),
+                "std": st.stdev(asr_vals) if len(asr_vals) > 1 else 0.0,
+                "n": len(asr_vals),
+                "values": {
+                    seed: float((by_seed[seed].get("label_recovery") or {}).get("asr"))
+                    for seed in by_seed
+                    if (by_seed[seed].get("label_recovery") or {}).get("asr") is not None
+                },
+            }
+        else:
+            cell["asr"] = {"mean": None, "std": None, "n": 0, "values": {}}
+        summary[key] = cell
+    return summary
+
+
 def load_client_diversity(path: Path | None = None):
     """Return list of dicts: [{client, labels, n_unique}, ...].
 
