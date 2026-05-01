@@ -287,6 +287,30 @@ VIABILITY_SCENARIOS = {
             'grad_accum_enabled': False,
         },
     },
+
+    # -- SelectiveShield in-family comparison (added 2026-04-29 in
+    # response to professor input). Fisher-targeted SHE + DP noise on
+    # the non-encrypted slice. The only mechanistic difference from
+    # V6 (default AdaGuard) is the DP noise component, so the
+    # AdaGuard-vs-SelectiveShield delta isolates the cost of the
+    # noise layer at matched encryption budget. In paper text /
+    # Tables III & IV this scenario renders as "V5 (SelectiveShield)"
+    # following the paper's V1-V4 numbering convention.
+    'V14': {
+        'id': 'V14',
+        'case': 'viability',
+        'group': 'baselines',
+        'name': 'selectiveshield_default',
+        'description': 'SelectiveShield: Fisher-targeted SHE (rho=0.10) + DP noise (eps=50) on non-encrypted slice (paper V5)',
+        'config_overrides': {
+            'encryption': 'selectiveshield',
+            'encryption_top_percent': 0.10,
+            'dp_epsilon': 50.0, 'dp_delta': 1e-5, 'dp_clip_norm': 1.0,
+            'T1': 0.3, 'T2': 0.7,
+            'label_weight': 1.0, 'entropy_weight': 1.0, 'empirical_weight': 0.0,
+            'grad_accum_enabled': False,
+        },
+    },
 }
 
 

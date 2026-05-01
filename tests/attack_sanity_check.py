@@ -419,14 +419,17 @@ def main():
                          'round and exit. Use before --auto-pick-diverse '
                          'to see what is available.')
     ap.add_argument('--defence',
-                    choices=['none', 'fhe', 'maskcrypt', 'fisher'],
+                    choices=['none', 'fhe', 'maskcrypt', 'fisher',
+                             'selectiveshield'],
                     default='none',
                     help='Apply a defence to the (possibly recomputed) '
                          'gradient_dict before running the attack. Needed '
                          'because Phase-1 artifacts save the RAW pre-defence '
                          'gradient regardless of scenario. '
                          'none=V1, fhe=V2 (zero all grads), '
-                         'maskcrypt=V4, fisher=V6 (AdaGuard core).')
+                         'maskcrypt=V4, fisher=V6 (AdaGuard core), '
+                         'selectiveshield=V14 (Fisher-targeted SHE + DP '
+                         'noise on non-encrypted slice; paper V5).')
     ap.add_argument('--defence-pct', type=float, default=0.1,
                     help='Fraction of parameters to encrypt (MaskCrypt/Fisher).')
     ap.add_argument('--no-classifier-head-guarantee', action='store_true',
@@ -451,6 +454,16 @@ def main():
                     help="Seed for the per-call random permutation when "
                          "--fisher-mask-mode=random. Default 42 for "
                          "reproducibility of the ablation.")
+    ap.add_argument('--ss-dp-epsilon', type=float, default=50.0,
+                    help='SelectiveShield DP epsilon for the noise on the '
+                         'non-encrypted slice (only used when --defence='
+                         'selectiveshield). Default 50 to match the MaskCrypt '
+                         'paper\'s DP baseline calibration.')
+    ap.add_argument('--ss-dp-delta', type=float, default=1e-5,
+                    help='SelectiveShield DP delta. Default 1e-5.')
+    ap.add_argument('--ss-dp-clip-norm', type=float, default=1.0,
+                    help='SelectiveShield DP L2 clip norm for the non-encrypted '
+                         'slice. Default 1.0.')
     ap.add_argument('--check-consistency', action='store_true',
                     help='Before running the attack, reconstruct the local '
                          'model (global - weight_delta), recompute the '
@@ -686,6 +699,57 @@ def main():
                 'strategy': 'maskcrypt',
                 'weights_encrypted': int(meta['weights_encrypted']),
                 'pct_encrypted': float(meta['pct_encrypted']),
+            }
+        elif args.defence == 'selectiveshield':
+            from adaguard.encryption.selectiveshield_encrypt import (
+                SelectiveShieldEncryptor,
+            )
+            from adaguard.metrics.fisher import FisherInformationMetric
+            k_enc = max(1, int(args.defence_pct * total))
+            # Inherit the classifier-head guarantee setting from the
+            # same CLI flag that controls it for V4 (Fisher); this lets
+            # the AdaGuard-vs-SelectiveShield comparison run with
+            # head-guarantee on for both, ablating only the DP-noise
+            # component.
+            mandatory = () if args.no_classifier_head_guarantee else None
+            fisher_metric = FisherInformationMetric(
+                enc_pct=args.defence_pct,
+                mandatory_layer_substrings=mandatory,
+            )
+            enc = SelectiveShieldEncryptor(
+                fisher_metric=fisher_metric,
+                enc_pct=args.defence_pct,
+                dp_epsilon=args.ss_dp_epsilon,
+                dp_delta=args.ss_dp_delta,
+                dp_clip_norm=args.ss_dp_clip_norm,
+            )
+            gd, meta = enc.encrypt(gd_cpu, k=k_enc)
+            guard_state = ('DISABLED (ablation)'
+                           if args.no_classifier_head_guarantee else 'ENABLED')
+            print(f"\n[defence=selectiveshield] encrypted "
+                  f"{meta['weights_encrypted']}/{total} params "
+                  f"({meta['pct_encrypted']*100:.1f}%); "
+                  f"DP eps={meta['dp_epsilon']} delta={meta['dp_delta']} "
+                  f"sigma={meta['dp_sigma']:.4f} on the "
+                  f"non-encrypted slice; classifier-head guarantee {guard_state}; "
+                  f"forced {meta['classifier_head_forced_count']} extra params "
+                  f"in {meta['classifier_head_forced_layers']}")
+            defence_meta = {
+                'strategy': 'selectiveshield',
+                'weights_encrypted': int(meta['weights_encrypted']),
+                'pct_encrypted': float(meta['pct_encrypted']),
+                'encryption_threshold': float(meta['encryption_threshold']),
+                'classifier_head_guarantee': not args.no_classifier_head_guarantee,
+                'classifier_head_forced_count': int(
+                    meta['classifier_head_forced_count']),
+                'classifier_head_forced_layers': list(
+                    meta['classifier_head_forced_layers']),
+                'dp_epsilon': float(meta['dp_epsilon']),
+                'dp_delta': float(meta['dp_delta']),
+                'dp_clip_norm': float(meta['dp_clip_norm']),
+                'dp_sigma': float(meta['dp_sigma']),
+                'dp_clip_factor': float(meta['dp_clip_factor']),
+                'dp_noise_norm': float(meta['dp_noise_norm']),
             }
 
     gd_gpu = {k: v.to(device) for k, v in gd.items()}
