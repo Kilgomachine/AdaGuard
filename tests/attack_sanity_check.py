@@ -382,7 +382,12 @@ def main():
                     help='Which round to pull a client from (default 249)')
     ap.add_argument('--client-id', type=int, default=None,
                     help='Specific client id; defaults to the first found')
-    ap.add_argument('--attack', required=True,
+    # --attack is required ONLY when actually running an attack. The
+    # --list-clients and --consistency-only modes return early without
+    # using it, so requiring it argparse-side would force callers to
+    # pass a placeholder value just to satisfy the parser. Post-parse
+    # check below enforces the constraint where it actually matters.
+    ap.add_argument('--attack', required=False, default=None,
                     choices=['gradinversion', 'gradinversion_breaching',
                              'gi_nas', 'ggcdm'])
     ap.add_argument('--n-iter', type=int, default=20000,
@@ -493,6 +498,13 @@ def main():
         for fname, lbls, n in scan_sorted:
             print(f"{fname:20s}  {n:9d}  {lbls}")
         return
+
+    # Past --list-clients early-exit; from here on we are running an
+    # actual attack (or a consistency check that will exit later), so
+    # --attack becomes required.
+    if args.attack is None and not args.consistency_only:
+        ap.error("--attack is required unless --list-clients or "
+                 "--consistency-only is set")
 
     print(f"\nLoading artifact from {art_dir} round {args.round}...")
     data = _load_artifact(
