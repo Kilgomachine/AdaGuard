@@ -36,12 +36,27 @@
 #   (each array task picks one (client, seed) pair from the list)
 # =============================================================
 
-# 5 client_ids spanning diversity strata. EDIT THESE after running
-# --list-clients on the round 249 artefact to identify the right
-# clients in YOUR seed42 artefact set. Defaults are placeholder
-# integers; if the corresponding client_<id>.pt does not exist in the
-# round 249 artefact, the task will fail loudly.
-CLIENT_IDS=(106 50 100 150 200)
+# 5 client_ids picked to span class-combination diversity within the
+# 3-unique-label stratum at round 249. Path A of the diversity-sweep
+# discussion: with 10% participation only the 30 active clients are
+# saved per round, and at round 249 all 30 happen to be 3-unique
+# (matches Table V client_diversity in the paper). To still test
+# cross-client robustness, we pick 5 clients with maximally-different
+# class triples covering most of CIFAR-10's 10 classes:
+#
+#   client_106  classes {1, 5, 6}
+#   client_13   classes {0, 1, 9}
+#   client_185  classes {2, 5, 7}
+#   client_173  classes {3, 6, 8}
+#   client_222  classes {0, 3, 7}
+#
+# Together these 5 cover classes {0,1,2,3,5,6,7,9}. The two missing
+# classes (4, 8 -- partially covered) are in 3-unique combinations
+# that overlap heavily with the 5 picked. Verified with --list-clients
+# on the seed42 artefacts; if the same client_id maps to different
+# class triples on seeds 123/456, the cross-seed dispersion will show
+# up in the multi-seed std and we report it as such.
+CLIENT_IDS=(106 13 185 173 222)
 SEEDS=(42 123 456)
 
 # Decode SLURM_ARRAY_TASK_ID into (client_idx, seed_idx).

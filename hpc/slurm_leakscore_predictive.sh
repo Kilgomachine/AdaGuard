@@ -42,10 +42,21 @@
 
 ROUNDS=(50 100 150 200 249)
 SEEDS=(42 123 456)
-# Client IDs spanning the diversity histogram. EDIT THESE based on
-# --list-clients output for the round 249 artefacts. Defaults are
-# placeholders; verify against your scratch.
-CLIENT_IDS=(106 50 100 150 200)
+# Client IDs picked to span class-combination diversity at round 249.
+# Same 5 as slurm_b4_multiclient_expansion.sh for cross-script
+# comparability. See that script's header comment for the reasoning
+# (saved-active-clients constraint forces all 30 to be 3-unique;
+# we span class triples instead of unique-label counts):
+#
+#   client_106  {1, 5, 6}      client_173  {3, 6, 8}
+#   client_13   {0, 1, 9}      client_222  {0, 3, 7}
+#   client_185  {2, 5, 7}
+#
+# NOTE: client membership in active-set varies by round. If a chosen
+# client_id is not in round R's saved active set (e.g.\ on rounds
+# 50/100/150/200 it may not have been sampled), the task will fail
+# loudly on that cell -- check the slurm logs and re-pick if needed.
+CLIENT_IDS=(106 13 185 173 222)
 
 TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"
 ROUND_IDX=$((TASK_ID / 3))
