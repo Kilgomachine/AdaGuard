@@ -16,12 +16,19 @@ DATA_DIR = REPO_ROOT / "data" / "paper_data"
 
 
 DEFENCE_LABELS = {
+    # Paper-side convention: V1-V5 contiguous (codebase scenario
+    # registry uses V1, V2, V3=DP (omitted), V4=MaskCrypt-guided,
+    # V6=AdaGuard, V14=SelectiveShield, but the *paper* renumbers
+    # them V1-V5 because DP is omitted from the headline matrix).
+    # Only the V-strings change; the file-name tokens (none/fhe/
+    # maskcrypt/fisher/selectiveshield) are stable.
     "none": "V1 (None)",
     "fhe": "V2 (FHE)",
-    "maskcrypt": "V4 (MaskCrypt)",
-    "fisher": "V6 (AdaGuard-Fisher)",
+    "maskcrypt": "V3 (MaskCrypt)",
+    "fisher": "V4 (AdaGuard-Fisher)",
+    "selectiveshield": "V5 (SelectiveShield)",
 }
-DEFENCE_ORDER = ["none", "fhe", "maskcrypt", "fisher"]
+DEFENCE_ORDER = ["none", "fhe", "maskcrypt", "fisher", "selectiveshield"]
 
 ATTACK_LABELS = {
     "gradinversion": "GradInversion",
@@ -33,7 +40,7 @@ ATTACK_ORDER = ["gradinversion", "ggcdm", "gi_nas"]
 
 
 _FILENAME_RE = re.compile(
-    r"^(?P<defence>none|fhe|maskcrypt|fisher)"
+    r"^(?P<defence>none|fhe|maskcrypt|fisher|selectiveshield)"
     r"_(?P<attack>gradinversion_breaching|gradinversion|ggcdm|gi_nas)"
     r"_b(?P<batch>\d+)\.json$"
 )
@@ -196,6 +203,13 @@ _V13_FILENAME_RE = re.compile(
     r"_seed(?P<seed>\d+)\.json$"
 )
 
+_V5_SS_FILENAME_RE = re.compile(
+    r"^selectiveshield"
+    r"_(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_b(?P<batch>\d+)"
+    r"_seed(?P<seed>\d+)\.json$"
+)
+
 
 def load_v13_random_sweep(data_dir: Path | None = None):
     """Return ``{(attack, batch): {seed: metrics_dict}}`` for the V13 ablation.
@@ -222,6 +236,73 @@ def load_v13_random_sweep(data_dir: Path | None = None):
         with p.open() as f:
             out.setdefault(key, {})[seed] = json.load(f)
     return out
+
+
+def merge_v5_selectiveshield(multiseed_sweep, v5_data_dir=None):
+    """Merge V5 SelectiveShield JSONs into an existing multi-seed sweep dict.
+
+    V5 results follow the V13 layout convention: flat directory at
+    ``data/paper_data/defence/v5_selectiveshield/`` with files named
+    ``selectiveshield_<attack>_b<B>_seed<seed>.json`` (the seed
+    suffix is in the filename rather than a per-seed subdirectory).
+    The merge folds these into the existing
+    ``{(defence, attack, batch): {seed: metrics}}`` shape used by
+    :func:`load_defence_sweep_multiseed` and consumed by
+    :func:`aggregate_multiseed`, so the existing
+    ``build_table_defence_matrix_multiseed`` builder picks up V5 as
+    a fifth defence column without code changes.
+
+    Returns the same dict (mutated in place) for chain-of-call
+    convenience. If the V5 directory doesn't exist, the dict is
+    returned unchanged.
+    """
+    v5_data_dir = v5_data_dir or (DATA_DIR / "defence" / "v5_selectiveshield")
+    if not v5_data_dir.exists():
+        return multiseed_sweep
+    for p in sorted(v5_data_dir.glob("*.json")):
+        m = _V5_SS_FILENAME_RE.match(p.name)
+        if not m:
+            continue
+        attack = m.group("attack")
+        batch = int(m.group("batch"))
+        seed = m.group("seed")
+        key = ("selectiveshield", attack, batch)
+        with p.open() as f:
+            multiseed_sweep.setdefault(key, {})[seed] = json.load(f)
+    return multiseed_sweep
+
+
+def merge_v5_selectiveshield_single_seed(sweep, v5_data_dir=None,
+                                         seed_to_use="42"):
+    """Merge V5 SelectiveShield JSONs into a single-seed sweep dict.
+
+    Mirror of :func:`merge_v5_selectiveshield` for the single-seed
+    sweep dict shape ``{(defence, attack, batch): metrics}``. By
+    default merges only the seed-42 entries to match the
+    ``load_defence_sweep`` single-seed-reference behaviour. Pass
+    ``seed_to_use=None`` to merge whichever seed is found first
+    (used when only one V5 seed has run).
+    """
+    v5_data_dir = v5_data_dir or (DATA_DIR / "defence" / "v5_selectiveshield")
+    if not v5_data_dir.exists():
+        return sweep
+    for p in sorted(v5_data_dir.glob("*.json")):
+        m = _V5_SS_FILENAME_RE.match(p.name)
+        if not m:
+            continue
+        seed = m.group("seed")
+        if seed_to_use is not None and seed != seed_to_use:
+            continue
+        attack = m.group("attack")
+        batch = int(m.group("batch"))
+        key = ("selectiveshield", attack, batch)
+        # Only set if not already present (don't overwrite a seed-42
+        # value with a seed-other if the loader's single-seed default
+        # changes upstream).
+        if key not in sweep:
+            with p.open() as f:
+                sweep[key] = json.load(f)
+    return sweep
 
 
 def aggregate_v13(v13_sweep, metrics=("psnr", "lpips", "ssim", "mse")):
