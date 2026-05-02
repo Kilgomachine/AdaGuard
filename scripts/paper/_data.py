@@ -251,6 +251,29 @@ _LSPRED_FILENAME_RE = re.compile(
     r"_client(?P<client>\d+)\.json$"
 )
 
+# K sweep attacks (slurm_k_sweep.sh output, attacks subdir):
+#   <defence>_<attack>_b1_K<k>_seed<seed>.json
+_KSWEEP_ATTACK_FILENAME_RE = re.compile(
+    r"^(?P<defence>none|fhe|maskcrypt|fisher|selectiveshield)"
+    r"_(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_b(?P<batch>\d+)"
+    r"_K(?P<k>\d+)"
+    r"_seed(?P<seed>\d+)\.json$"
+)
+
+# B sweep attacks (slurm_b_sweep.sh output, attacks subdir):
+#   <defence>_<attack>_b<attack_B>_B<train_B>_seed<seed>.json
+# attack_B and train_B are the same in our scripts (we attack at the
+# same B as Phase-1 trained at), but the regex captures both for
+# flexibility in case a future variant decouples them.
+_BSWEEP_ATTACK_FILENAME_RE = re.compile(
+    r"^(?P<defence>none|fhe|maskcrypt|fisher|selectiveshield)"
+    r"_(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_b(?P<attack_batch>\d+)"
+    r"_B(?P<train_batch>\d+)"
+    r"_seed(?P<seed>\d+)\.json$"
+)
+
 
 def load_v13_random_sweep(data_dir: Path | None = None):
     """Return ``{(attack, batch): {seed: metrics_dict}}`` for the V13 ablation.
@@ -556,6 +579,122 @@ def load_leakscore_predictive(data_dir=None):
         )
         with p.open() as f:
             out[key] = json.load(f)
+    return out
+
+
+def load_ksweep_attacks(data_dir=None):
+    """Return ``{(K, defence, attack, batch): {seed: metrics}}`` for K-sweep
+    attack outcomes.
+
+    Reads from ``data/paper_data/ksweep/K<K>_seed<seed>/attacks/*.json``.
+    Each per-task subdir holds a 4-defence x 3-attack matrix on the
+    retrained K-specific Phase-1 trajectory's round-249 artefact.
+    """
+    data_dir = data_dir or (DATA_DIR / "ksweep")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    for task_dir in sorted(data_dir.glob("K*_seed*")):
+        attacks_dir = task_dir / "attacks"
+        if not attacks_dir.exists():
+            continue
+        for p in sorted(attacks_dir.glob("*.json")):
+            m = _KSWEEP_ATTACK_FILENAME_RE.match(p.name)
+            if not m:
+                continue
+            key = (
+                int(m.group("k")),
+                m.group("defence"),
+                m.group("attack"),
+                int(m.group("batch")),
+            )
+            seed = m.group("seed")
+            with p.open() as f:
+                out.setdefault(key, {})[seed] = json.load(f)
+    return out
+
+
+def load_ksweep_trajectories(data_dir=None):
+    """Return ``{(K, seed): training_json}`` for K-sweep Phase-1 trajectories.
+
+    Each task subdir under ``data/paper_data/ksweep/K<K>_seed<seed>/``
+    holds a ``training.json`` with the per-round accuracy, LeakScore,
+    encryption_pct etc. that the simulator saves in Phase-1.
+    """
+    import re as _re
+    data_dir = data_dir or (DATA_DIR / "ksweep")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    pattern = _re.compile(r"^K(?P<k>\d+)_seed(?P<seed>\d+)$")
+    for task_dir in sorted(data_dir.glob("K*_seed*")):
+        m = pattern.match(task_dir.name)
+        if not m:
+            continue
+        train_json = task_dir / "training.json"
+        if not train_json.exists():
+            continue
+        with train_json.open() as f:
+            out[(int(m.group("k")), m.group("seed"))] = json.load(f)
+    return out
+
+
+def load_bsweep_attacks(data_dir=None):
+    """Return ``{(B, defence, attack, attack_batch): {seed: metrics}}`` for
+    B-sweep attack outcomes.
+
+    Reads from ``data/paper_data/bsweep/B<B>_seed<seed>/attacks/*.json``.
+    Filename layout has both attack-time and training-time batch
+    numbers (slurm script reuses the trained B for the attack
+    batch); the loader captures attack_batch (== train_batch in
+    practice) for indexing.
+    """
+    data_dir = data_dir or (DATA_DIR / "bsweep")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    for task_dir in sorted(data_dir.glob("B*_seed*")):
+        attacks_dir = task_dir / "attacks"
+        if not attacks_dir.exists():
+            continue
+        for p in sorted(attacks_dir.glob("*.json")):
+            m = _BSWEEP_ATTACK_FILENAME_RE.match(p.name)
+            if not m:
+                continue
+            key = (
+                int(m.group("train_batch")),
+                m.group("defence"),
+                m.group("attack"),
+                int(m.group("attack_batch")),
+            )
+            seed = m.group("seed")
+            with p.open() as f:
+                out.setdefault(key, {})[seed] = json.load(f)
+    return out
+
+
+def load_bsweep_trajectories(data_dir=None):
+    """Return ``{(B, seed): training_json}`` for B-sweep Phase-1 trajectories.
+
+    Same shape as :func:`load_ksweep_trajectories`. Each B-sweep task
+    produces one training.json; this loader walks the per-task
+    subdirs and reads them.
+    """
+    import re as _re
+    data_dir = data_dir or (DATA_DIR / "bsweep")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    pattern = _re.compile(r"^B(?P<b>\d+)_seed(?P<seed>\d+)$")
+    for task_dir in sorted(data_dir.glob("B*_seed*")):
+        m = pattern.match(task_dir.name)
+        if not m:
+            continue
+        train_json = task_dir / "training.json"
+        if not train_json.exists():
+            continue
+        with train_json.open() as f:
+            out[(int(m.group("b")), m.group("seed"))] = json.load(f)
     return out
 
 
