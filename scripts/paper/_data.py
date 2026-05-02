@@ -210,6 +210,47 @@ _V5_SS_FILENAME_RE = re.compile(
     r"_seed(?P<seed>\d+)\.json$"
 )
 
+# B=4 single-client quick (slurm_ggcdm_b4_quick.sh output):
+#   <attack>_b4_<defence>_seed<seed>.json
+# (attack is fixed to ggcdm in the quick script today, but the regex
+# is broader so the same loader handles a future "all 3 attacks at
+# B=4 single client" extension without changes.)
+_B4_QUICK_FILENAME_RE = re.compile(
+    r"^(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_b(?P<batch>\d+)"
+    r"_(?P<defence>none|fhe|maskcrypt|fisher|selectiveshield)"
+    r"_seed(?P<seed>\d+)\.json$"
+)
+
+# B=4 multi-client expansion (slurm_b4_multiclient_expansion.sh output):
+#   <attack>_b<B>_<defence>_seed<seed>_client<client>.json
+_B4_MULTI_FILENAME_RE = re.compile(
+    r"^(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_b(?P<batch>\d+)"
+    r"_(?P<defence>none|fhe|maskcrypt|fisher|selectiveshield)"
+    r"_seed(?P<seed>\d+)"
+    r"_client(?P<client>\d+)\.json$"
+)
+
+# T1 x rho heatmap (slurm_t1_rho_heatmap.sh output):
+#   t1<t1>_rho<rho>_<attack>_seed<seed>.json
+_T1RHO_FILENAME_RE = re.compile(
+    r"^t1(?P<t1>[\d.]+)"
+    r"_rho(?P<rho>[\d.]+)"
+    r"_(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_seed(?P<seed>\d+)\.json$"
+)
+
+# LeakScore predictive validation (slurm_leakscore_predictive.sh output):
+#   lspred_<attack>_seed<seed>_round<round>_client<client>.json
+_LSPRED_FILENAME_RE = re.compile(
+    r"^lspred"
+    r"_(?P<attack>gradinversion|ggcdm|gi_nas)"
+    r"_seed(?P<seed>\d+)"
+    r"_round(?P<round>\d+)"
+    r"_client(?P<client>\d+)\.json$"
+)
+
 
 def load_v13_random_sweep(data_dir: Path | None = None):
     """Return ``{(attack, batch): {seed: metrics_dict}}`` for the V13 ablation.
@@ -303,6 +344,219 @@ def merge_v5_selectiveshield_single_seed(sweep, v5_data_dir=None,
             with p.open() as f:
                 sweep[key] = json.load(f)
     return sweep
+
+
+def load_b4_quick_sweep(data_dir=None):
+    """Return ``{(defence, attack, batch): {seed: metrics}}`` for the B=4
+    single-client quick sweep (slurm_ggcdm_b4_quick.sh output).
+
+    Reads from ``data/paper_data/defence/b4_quick/``. Filename layout
+    is ``<attack>_b<B>_<defence>_seed<seed>.json`` (different from the
+    standard seed-dir layout because the slurm output bundles all
+    seeds in one flat dir for easy scp). Returns the same shape as
+    :func:`load_defence_sweep_multiseed` so the same downstream
+    aggregator/builder code works.
+
+    Empty dict if the directory does not exist (no-op until results
+    land). Implicitly client=client_106 since this is the
+    most-diverse-client quick variant; clients across the diversity
+    histogram come from :func:`load_b4_multiclient_sweep` instead.
+    """
+    data_dir = data_dir or (DATA_DIR / "defence" / "b4_quick")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    for p in sorted(data_dir.glob("*.json")):
+        m = _B4_QUICK_FILENAME_RE.match(p.name)
+        if not m:
+            continue
+        key = (m.group("defence"), m.group("attack"), int(m.group("batch")))
+        seed = m.group("seed")
+        with p.open() as f:
+            out.setdefault(key, {})[seed] = json.load(f)
+    return out
+
+
+def load_b4_multiclient_sweep(data_dir=None):
+    """Return ``{(defence, attack, batch, client): {seed: metrics}}`` for
+    the B=4 multi-client expansion (slurm_b4_multiclient_expansion.sh).
+
+    Reads from ``data/paper_data/defence/b4_multiclient/``. Filename
+    layout is
+    ``<attack>_b<B>_<defence>_seed<seed>_client<client>.json``. The
+    extra ``client`` dimension lets the cross-client variation enter
+    the aggregator/figure code (vs. the 3-dim
+    ``(defence, attack, batch)`` shape used by
+    :func:`load_defence_sweep_multiseed`).
+
+    Empty dict if the directory does not exist.
+    """
+    data_dir = data_dir or (DATA_DIR / "defence" / "b4_multiclient")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    for p in sorted(data_dir.glob("*.json")):
+        m = _B4_MULTI_FILENAME_RE.match(p.name)
+        if not m:
+            continue
+        key = (
+            m.group("defence"),
+            m.group("attack"),
+            int(m.group("batch")),
+            int(m.group("client")),
+        )
+        seed = m.group("seed")
+        with p.open() as f:
+            out.setdefault(key, {})[seed] = json.load(f)
+    return out
+
+
+def aggregate_b4_multiclient(b4_multi_sweep,
+                              metrics=("psnr", "lpips", "ssim", "mse")):
+    """Reduce B=4 multi-client sweep to ``{(defence, attack, batch):
+    {metric: {mean, std, n_seeds, n_clients, values}}}``.
+
+    Aggregates across BOTH seeds and clients for each (defence,
+    attack, batch) cell. The ``values`` field preserves the per-cell
+    measurements so downstream code can compute paired tests or
+    cross-client error bars. ``n_seeds`` and ``n_clients`` reflect
+    only the cells that actually have data.
+    """
+    import statistics as st
+
+    by_cell: dict = {}
+    for (defence, attack, batch, client), by_seed in b4_multi_sweep.items():
+        cell_key = (defence, attack, batch)
+        by_cell.setdefault(cell_key, {}).setdefault(client, by_seed)
+
+    summary: dict = {}
+    for cell_key, by_client in by_cell.items():
+        cell: dict = {}
+        for metric in metrics:
+            vals = []
+            per_client_values = {}
+            for client, by_seed in by_client.items():
+                client_vals = []
+                for seed, m in by_seed.items():
+                    v = m.get(metric)
+                    if v is None:
+                        continue
+                    try:
+                        v = float(v)
+                    except (TypeError, ValueError):
+                        continue
+                    vals.append(v)
+                    client_vals.append(v)
+                if client_vals:
+                    per_client_values[client] = client_vals
+            if not vals:
+                cell[metric] = {"mean": None, "std": None,
+                                "n_seeds": 0, "n_clients": 0,
+                                "values": {}}
+                continue
+            cell[metric] = {
+                "mean": st.mean(vals),
+                "std": st.stdev(vals) if len(vals) > 1 else 0.0,
+                "n_seeds": max(len(v) for v in per_client_values.values()),
+                "n_clients": len(per_client_values),
+                "values": per_client_values,
+            }
+        # ASR (nested under label_recovery)
+        asr_vals = []
+        per_client_asr = {}
+        for client, by_seed in by_client.items():
+            client_asr = []
+            for seed, m in by_seed.items():
+                lr = m.get("label_recovery") or {}
+                v = lr.get("asr")
+                if v is None:
+                    continue
+                try:
+                    v = float(v)
+                except (TypeError, ValueError):
+                    continue
+                asr_vals.append(v)
+                client_asr.append(v)
+            if client_asr:
+                per_client_asr[client] = client_asr
+        if asr_vals:
+            cell["asr"] = {
+                "mean": st.mean(asr_vals),
+                "std": st.stdev(asr_vals) if len(asr_vals) > 1 else 0.0,
+                "n_seeds": max(len(v) for v in per_client_asr.values()),
+                "n_clients": len(per_client_asr),
+                "values": per_client_asr,
+            }
+        else:
+            cell["asr"] = {"mean": None, "std": None,
+                           "n_seeds": 0, "n_clients": 0, "values": {}}
+        summary[cell_key] = cell
+    return summary
+
+
+def load_t1rho_heatmap(data_dir=None):
+    """Return ``{(t1, rho, attack): {seed: metrics}}`` for the T1xrho heatmap.
+
+    Reads from ``data/paper_data/defence/t1rho_heatmap/``. The slurm
+    script annotates each JSON with ``t1``, ``rho``, ``effective_pct``,
+    and ``leakscore`` fields in addition to the standard attack
+    metrics, so downstream callers get the controller's
+    (T1, rho, LeakScore) -> effective_pct collapse for free.
+
+    Cells where the controller produced effective_pct=0 are recorded
+    by the slurm script as a stub JSON with ``"skipped": true``; the
+    loader still returns them so the heatmap can render the
+    "encryption did not fire" cells distinctly.
+    """
+    data_dir = data_dir or (DATA_DIR / "defence" / "t1rho_heatmap")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    for p in sorted(data_dir.glob("*.json")):
+        m = _T1RHO_FILENAME_RE.match(p.name)
+        if not m:
+            continue
+        try:
+            t1 = float(m.group("t1"))
+            rho = float(m.group("rho"))
+        except ValueError:
+            continue
+        attack = m.group("attack")
+        seed = m.group("seed")
+        key = (t1, rho, attack)
+        with p.open() as f:
+            out.setdefault(key, {})[seed] = json.load(f)
+    return out
+
+
+def load_leakscore_predictive(data_dir=None):
+    """Return ``{(attack, round, client, seed): metrics}`` for the
+    LeakScore predictive-validation sweep.
+
+    Reads from ``data/paper_data/defence/leakscore_predictive/``. All
+    cells run on V1 (undefended), so defence is implicit. The
+    correlation analysis (see scripts/paper/build_leakscore_correlation.py
+    -- to be written) joins each cell's attack outcome (PSNR/ASR)
+    against the matching per-round per-client LeakScore from the
+    Phase-1 trajectory JSONs in data/paper_data/training/.
+    """
+    data_dir = data_dir or (DATA_DIR / "defence" / "leakscore_predictive")
+    out: dict = {}
+    if not data_dir.exists():
+        return out
+    for p in sorted(data_dir.glob("*.json")):
+        m = _LSPRED_FILENAME_RE.match(p.name)
+        if not m:
+            continue
+        key = (
+            m.group("attack"),
+            int(m.group("round")),
+            int(m.group("client")),
+            m.group("seed"),
+        )
+        with p.open() as f:
+            out[key] = json.load(f)
+    return out
 
 
 def aggregate_v13(v13_sweep, metrics=("psnr", "lpips", "ssim", "mse")):
