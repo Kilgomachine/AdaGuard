@@ -61,6 +61,13 @@ module load Python/3.10.14
 module load CUDA/12.4
 source /projects/secure-distributed-ml/venv/bin/activate
 
+# CIFAR-10 lives on /scratch (not in the project tree). Without this
+# torchvision tries to re-download from its canonical URL on every
+# task and fails with HTTP 503 -- root cause of the silent
+# Phase-1-never-trains failure observed on 2026-04-29 (see
+# CHANGELOG_REVIEW.md Round 4 and the smoke test in 2026-05-03).
+export DATA_DIR=/scratch/projects/secure-distributed-ml/data
+
 OUTROOT="/scratch/projects/secure-distributed-ml/results/ksweep_K${K_VAL}_seed${SEED}_${SLURM_ARRAY_JOB_ID}"
 ARTIFACT_DIR="$OUTROOT/artifacts"
 ATTACK_DIR="$OUTROOT/attacks"
