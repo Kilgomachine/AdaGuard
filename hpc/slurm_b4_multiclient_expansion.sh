@@ -36,36 +36,45 @@
 #   (each array task picks one (client, seed) pair from the list)
 # =============================================================
 
-# 5 client_ids picked to span class-combination diversity within the
-# 3-unique-label stratum at round 249. Path A of the diversity-sweep
-# discussion: with 10% participation only the 30 active clients are
-# saved per round, and at round 249 all 30 happen to be 3-unique
-# (matches Table V client_diversity in the paper). To still test
-# cross-client robustness, we pick 5 clients with maximally-different
-# class triples covering most of CIFAR-10's 10 classes:
+# Per-seed client_id lists picked to span class-combination diversity
+# within the 3-unique-label stratum at round 249. Round 4 used a
+# single CLIENT_IDS list (chosen from seed 42's saved active set),
+# which produced empty output for seeds 123/456 because their
+# saved-active client samples differ from seed 42's --- per-seed
+# Phase-1 random sampling means the same global client id is NOT
+# necessarily in every seed's saved round-249 active set.
 #
-#   client_106  classes {1, 5, 6}
-#   client_13   classes {0, 1, 9}
-#   client_185  classes {2, 5, 7}
-#   client_173  classes {3, 6, 8}
-#   client_222  classes {0, 3, 7}
+# Per-seed lists below were picked via --list-clients on each seed's
+# artefact dir at round 249, then chosen for maximum class-triple
+# spread. Combined across seeds we cover all 10 CIFAR-10 classes.
 #
-# Together these 5 cover classes {0,1,2,3,5,6,7,9}. The two missing
-# classes (4, 8 -- partially covered) are in 3-unique combinations
-# that overlap heavily with the 5 picked. Verified with --list-clients
-# on the seed42 artefacts; if the same client_id maps to different
-# class triples on seeds 123/456, the cross-seed dispersion will show
-# up in the multi-seed std and we report it as such.
-CLIENT_IDS=(106 13 185 173 222)
+#   seed 42:  client_106 {1,5,6}, client_13 {0,1,9}, client_185 {2,5,7},
+#             client_173 {3,6,8}, client_222 {0,3,7}
+#             (covers classes {0,1,2,3,5,6,7,9})
+#   seed 123: client_107 {5,8,9}, client_114 {1,2,6}, client_125 {4,5,9},
+#             client_158 {1,3,8}, client_159 {0,8,9}
+#             (covers classes {0,1,2,3,4,5,6,8,9})
+#   seed 456: client_0 {0,1,8}, client_108 {2,5,9}, client_112 {2,7,8},
+#             client_113 {2,6,9}, client_120 {5,6,9}
+#             (covers classes {0,1,2,5,6,7,8,9})
+CLIENT_IDS_42=(106 13 185 173 222)
+CLIENT_IDS_123=(107 114 125 158 159)
+CLIENT_IDS_456=(0 108 112 113 120)
 SEEDS=(42 123 456)
 
-# Decode SLURM_ARRAY_TASK_ID into (client_idx, seed_idx).
+# Decode SLURM_ARRAY_TASK_ID into (client_idx, seed_idx) and pick
+# the client_id from the seed-specific list (5 clients per seed).
 TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"
-N_CLIENTS=${#CLIENT_IDS[@]}
+N_CLIENTS=5
 CLIENT_IDX=$((TASK_ID / 3))
 SEED_IDX=$((TASK_ID % 3))
-CLIENT_ID="${CLIENT_IDS[$CLIENT_IDX]}"
 SEED="${SEEDS[$SEED_IDX]}"
+case "$SEED" in
+    42)  CLIENT_ID="${CLIENT_IDS_42[$CLIENT_IDX]}"  ;;
+    123) CLIENT_ID="${CLIENT_IDS_123[$CLIENT_IDX]}" ;;
+    456) CLIENT_ID="${CLIENT_IDS_456[$CLIENT_IDX]}" ;;
+    *)   echo "ERROR: no CLIENT_IDS list for seed $SEED" >&2; exit 1 ;;
+esac
 
 echo "B=4 multi-client task $SLURM_ARRAY_JOB_ID.$SLURM_ARRAY_TASK_ID on $(hostname) at $(date)"
 echo "  client_id : $CLIENT_ID  (idx=$CLIENT_IDX of $N_CLIENTS)"
