@@ -1,0 +1,34 @@
+{
+  "attack": "ggcdm",
+  "n_iter": 100,
+  "n_candidates": null,
+  "time_s": 13.64545726776123,
+  "gradient_score": 0.0,
+  "label_recovery": {
+    "asr": 0.25,
+    "predicted": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "truth": [
+      1,
+      0,
+      8,
+      8
+    ],
+    "source": "fc.weight.rowsum",
+    "key_used": "fc.weight",
+    "signal": 0.0
+  },
+  "defence_meta": {
+    "strategy": "fhe",
+    "weights_encrypted": 11173962,
+    "pct_encrypted": 1.0
+  },
+  "mse": 0.13360543549060822,
+  "psnr": 8.741758730314421,
+  "ssim": 0.29305268203218776,
+  "lpips": 0.2759465277194977
+}

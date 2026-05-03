@@ -55,3 +55,4 @@ paper_overleaf/
 
 # Paper deliverable archives (local-only; final PDF lives on Overleaf)
 *.zip
+*.tgz

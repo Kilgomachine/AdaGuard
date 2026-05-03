@@ -1,0 +1,34 @@
+{
+  "attack": "gi_nas",
+  "n_iter": 2000,
+  "n_candidates": null,
+  "time_s": 61.92382526397705,
+  "gradient_score": 0.0,
+  "label_recovery": {
+    "asr": 0.75,
+    "predicted": [
+      0,
+      3,
+      7,
+      8
+    ],
+    "truth": [
+      3,
+      7,
+      0,
+      0
+    ],
+    "source": "fc.bias",
+    "key_used": "fc.bias",
+    "signal": 2.5756628829753936e-08
+  },
+  "defence_meta": {
+    "strategy": "maskcrypt",
+    "weights_encrypted": 1117396,
+    "pct_encrypted": 0.09999998210124574
+  },
+  "mse": 0.1534913033246994,
+  "psnr": 8.139162262134414,
+  "ssim": 0.20142101729288697,
+  "lpips": 0.14639495313167572
+}

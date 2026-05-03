@@ -1,0 +1,10 @@
+{
+  "attack": "ggcdm",
+  "n_iter": 0,
+  "skipped": true,
+  "skip_reason": "controller produced encrypt_pct=0 at T1=0.40 rho=0.30 LS=0.388",
+  "t1": 0.40,
+  "rho": 0.30,
+  "effective_pct": 0.0,
+  "leakscore": 0.388
+}

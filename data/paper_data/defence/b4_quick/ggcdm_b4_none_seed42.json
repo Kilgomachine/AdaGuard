@@ -1,0 +1,29 @@
+{
+  "attack": "ggcdm",
+  "n_iter": 100,
+  "n_candidates": null,
+  "time_s": 57.36925649642944,
+  "gradient_score": 0.07276606969231847,
+  "label_recovery": {
+    "asr": 0.25,
+    "predicted": [
+      6,
+      6,
+      6,
+      6
+    ],
+    "truth": [
+      6,
+      1,
+      1,
+      5
+    ],
+    "source": "fc.bias",
+    "key_used": "fc.bias",
+    "signal": 0.003074209438636899
+  },
+  "mse": 0.25381094217300415,
+  "psnr": 5.954896587467569,
+  "ssim": -0.0359760212401549,
+  "lpips": 0.2654464840888977
+}

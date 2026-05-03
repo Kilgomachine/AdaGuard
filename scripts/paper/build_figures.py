@@ -39,10 +39,11 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Colour-blind safe palette (Wong 2011) + hatches for B/W print.
 _DEF_STYLE = {
-    "none":      {"color": "#999999", "hatch": "",   "label": DEFENCE_LABELS["none"]},
-    "fhe":       {"color": "#0072B2", "hatch": "//", "label": DEFENCE_LABELS["fhe"]},
-    "maskcrypt": {"color": "#E69F00", "hatch": "xx", "label": DEFENCE_LABELS["maskcrypt"]},
-    "fisher":    {"color": "#009E73", "hatch": "..", "label": DEFENCE_LABELS["fisher"]},
+    "none":             {"color": "#999999", "hatch": "",   "label": DEFENCE_LABELS["none"]},
+    "fhe":              {"color": "#0072B2", "hatch": "//", "label": DEFENCE_LABELS["fhe"]},
+    "maskcrypt":        {"color": "#E69F00", "hatch": "xx", "label": DEFENCE_LABELS["maskcrypt"]},
+    "fisher":           {"color": "#009E73", "hatch": "..", "label": DEFENCE_LABELS["fisher"]},
+    "selectiveshield":  {"color": "#CC79A7", "hatch": "++", "label": DEFENCE_LABELS["selectiveshield"]},
 }
 
 plt.rcParams.update({
@@ -380,6 +381,251 @@ def fig_leakscore_trajectory():
     _savefig(fig, "fig_leakscore_trajectory")
 
 
+# --------------------------------------------------------------------------
+# Figure 7: T1 x rho heatmap (added 2026-05-03 in response to professor
+# pre-submission review). Tests whether T1 (controller threshold) and
+# rho (encryption fraction) interact -- one-at-a-time sensitivity
+# sweeps cannot detect this. The 5x5 grid per attack reveals the
+# structure of the controller's (T1, rho) -> effective_pct collapse
+# given the cached round-249 LeakScore (~0.388 multi-seed mean).
+# --------------------------------------------------------------------------
+
+def fig_t1rho_heatmap():
+    """3-panel heatmap (one per attack) of PSNR across the T1 x rho grid.
+
+    Pulls cells from data/paper_data/defence/t1rho_heatmap/. Cells where
+    the controller produced encrypt_pct=0 (T1 > LeakScore) are rendered
+    as a hatched grey overlay so the "encryption did not fire" region is
+    visually distinct from the cells that received targeted Fisher
+    encryption.
+    """
+    sys.path.insert(0, str(HERE.parent))
+    from paper._data import load_t1rho_heatmap
+    data = load_t1rho_heatmap()
+    if not data:
+        print("skip fig_t1rho_heatmap (no data)")
+        return
+
+    T1_values = [0.10, 0.20, 0.30, 0.40, 0.50]
+    rho_values = [0.05, 0.10, 0.15, 0.20, 0.30]
+    attacks = ["gradinversion", "ggcdm", "gi_nas"]
+
+    # For single-seed sweep we just take whichever seed is present per cell.
+    def _cell_value(t1, rho, attack):
+        key = (t1, rho, attack)
+        if key not in data:
+            return None, False  # missing
+        per_seed = data[key]
+        # take the first available seed entry
+        for seed, m in per_seed.items():
+            if m.get("skipped"):
+                return None, True  # skipped
+            psnr = m.get("psnr")
+            if psnr is None:
+                return None, True
+            return float(psnr), False
+        return None, True
+
+    # Pre-compute the matrix per attack and the skipped mask.
+    matrices = {}
+    skipped_masks = {}
+    all_psnr = []
+    for a in attacks:
+        M = np.full((len(T1_values), len(rho_values)), np.nan)
+        S = np.zeros_like(M, dtype=bool)
+        for i, t1 in enumerate(T1_values):
+            for j, rho in enumerate(rho_values):
+                v, sk = _cell_value(t1, rho, a)
+                S[i, j] = sk
+                if v is not None:
+                    M[i, j] = v
+                    all_psnr.append(v)
+        matrices[a] = M
+        skipped_masks[a] = S
+
+    if not all_psnr:
+        print("skip fig_t1rho_heatmap (no usable PSNR cells)")
+        return
+
+    vmin = min(all_psnr)
+    vmax = max(all_psnr)
+    # Single colour scale across panels for cross-attack comparability.
+    cmap = plt.cm.viridis_r  # darker = lower PSNR = stronger defence
+
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 3.8),
+                             sharex=True, sharey=True)
+
+    for ax, a in zip(axes, attacks):
+        M = matrices[a]
+        S = skipped_masks[a]
+        im = ax.imshow(M, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto",
+                       origin="lower")
+        # Hatch the skipped cells with grey so the "encryption did not
+        # fire" region is visually unambiguous.
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
+                if S[i, j]:
+                    ax.add_patch(plt.Rectangle(
+                        (j - 0.5, i - 0.5), 1, 1,
+                        facecolor="#dddddd", edgecolor="#888888",
+                        hatch="///", linewidth=0.4,
+                    ))
+                else:
+                    psnr_str = f"{M[i, j]:.1f}"
+                    txt_color = "white" if M[i, j] < (vmin + vmax) / 2 else "black"
+                    ax.text(j, i, psnr_str, ha="center", va="center",
+                            fontsize=8, color=txt_color)
+        ax.set_xticks(range(len(rho_values)))
+        ax.set_xticklabels([f"{r:.2f}" for r in rho_values], fontsize=8)
+        ax.set_yticks(range(len(T1_values)))
+        ax.set_yticklabels([f"{t:.2f}" for t in T1_values], fontsize=8)
+        ax.set_xlabel(r"$\rho$ (base encryption fraction)")
+        ax.set_title(ATTACK_LABELS.get(a, a))
+
+    axes[0].set_ylabel(r"$T_1$ (controller threshold)")
+    fig.suptitle(
+        r"PSNR across the $T_1 \times \rho$ grid (lower = stronger defence). "
+        r"Hatched cells: $T_1 > $ LeakScore$ \approx 0.388$, "
+        r"controller did not fire encryption.",
+        fontsize=9,
+    )
+
+    cbar = fig.colorbar(im, ax=axes, orientation="vertical",
+                        fraction=0.025, pad=0.02)
+    cbar.set_label("PSNR (dB)", fontsize=9)
+
+    fig.subplots_adjust(top=0.82, bottom=0.18)
+    _savefig(fig, "fig_t1rho_heatmap")
+
+
+# --------------------------------------------------------------------------
+# Figure 8: LeakScore predictive correlation (added 2026-05-03 in
+# response to professor pre-submission ask). Per-client LeakScore at
+# round 249 vs per-client attack PSNR on V1 (undefended), n=5 clients
+# spanning class-combination diversity within the 3-unique-label
+# saved-active stratum. Joins the LSpred attack JSONs against the
+# per_client.leakscore field of the V1 training trajectory.
+# --------------------------------------------------------------------------
+
+def fig_leakscore_predictive_correlation():
+    """Scatter of per-client LeakScore vs per-client attack PSNR.
+
+    Loads:
+      - data/paper_data/defence/leakscore_predictive/lspred_*.json
+        (per-client attack outcomes)
+      - data/paper_data/training/none_seed42_300clients.json
+        (per-client LeakScore at the matching round)
+
+    The display-round-vs-stored-round off-by-one is documented in the
+    LSpred subsubsection of the paper: the artefact dir labelled
+    round_249 corresponds to the V1 trajectory's rounds[249] entry
+    (display round 250), which is what we look up here.
+    """
+    import json as _json
+    import os as _os
+    import re as _re
+    from collections import defaultdict
+    sys.path.insert(0, str(HERE.parent))
+    from paper._data import DATA_DIR as _DATA_DIR
+
+    lspred_dir = _DATA_DIR / "defence" / "leakscore_predictive"
+    train_path = _DATA_DIR / "training" / "none_seed42_300clients.json"
+
+    if not lspred_dir.exists() or not train_path.exists():
+        print("skip fig_leakscore_predictive_correlation (missing data)")
+        return
+
+    train = _json.load(train_path.open())
+    # Index of the round whose saved per_client matches the artefact-dir
+    # convention (artefact `round_249/` -> training rounds[249]).
+    pc_entries = train["rounds"][249].get("per_client", [])
+    client_ls = {entry["id"]: entry["leakscore"] for entry in pc_entries}
+
+    # Load LSpred cells.
+    pattern = _re.compile(
+        r"^lspred_(?P<attack>gradinversion|ggcdm|gi_nas)"
+        r"_seed(?P<seed>\d+)"
+        r"_round(?P<round>\d+)"
+        r"_client(?P<client>\d+)\.json$"
+    )
+    cells = defaultdict(list)
+    for p in sorted(lspred_dir.glob("*.json")):
+        m = pattern.match(p.name)
+        if not m:
+            continue
+        attack = m.group("attack")
+        client = int(m.group("client"))
+        ls = client_ls.get(client)
+        if ls is None:
+            continue
+        d = _json.load(p.open())
+        psnr = d.get("psnr")
+        if psnr is None:
+            continue
+        cells[attack].append((client, ls, float(psnr)))
+
+    if not any(cells.values()):
+        print("skip fig_leakscore_predictive_correlation (no joinable cells)")
+        return
+
+    fig, ax = plt.subplots(figsize=(6.0, 4.0))
+    colours = {
+        "gradinversion": "#0072B2",
+        "ggcdm":         "#E69F00",
+        "gi_nas":        "#009E73",
+    }
+    markers = {
+        "gradinversion": "o",
+        "ggcdm":         "s",
+        "gi_nas":        "^",
+    }
+
+    import statistics as _st
+    legend_labels = []
+    for attack in ["gradinversion", "ggcdm", "gi_nas"]:
+        rows = cells.get(attack, [])
+        if not rows:
+            continue
+        xs = [r[1] for r in rows]
+        ys = [r[2] for r in rows]
+        ax.scatter(xs, ys, color=colours[attack], marker=markers[attack],
+                   s=60, edgecolors="black", linewidth=0.6,
+                   label=ATTACK_LABELS.get(attack, attack), zorder=3)
+        # Annotate each point with its client id for traceability
+        for cid, x, y in rows:
+            ax.annotate(f"c{cid}", (x, y), xytext=(4, 4),
+                        textcoords="offset points", fontsize=7,
+                        color=colours[attack], alpha=0.8)
+        # Pearson correlation
+        if len(xs) >= 2:
+            n = len(xs)
+            mx, my = _st.mean(xs), _st.mean(ys)
+            cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / n
+            sx = (sum((x - mx) ** 2 for x in xs) / n) ** 0.5
+            sy = (sum((y - my) ** 2 for y in ys) / n) ** 0.5
+            r = cov / (sx * sy) if sx > 0 and sy > 0 else float("nan")
+            label = f"{ATTACK_LABELS.get(attack, attack)} (Pearson $r={r:+.2f}$, n={n})"
+        else:
+            label = f"{ATTACK_LABELS.get(attack, attack)} (n={len(xs)})"
+        legend_labels.append((colours[attack], markers[attack], label))
+
+    ax.set_xlabel("per-client LeakScore at round 249 (V1 trajectory)")
+    ax.set_ylabel("per-client attack PSNR (dB) at $B{=}1$, V1 undefended")
+    ax.set_title("LeakScore vs.\\ attack-PSNR correlation (seed 42, n=5 clients)")
+    # Custom legend with the correlation in the label
+    from matplotlib.lines import Line2D
+    legend_handles = [
+        Line2D([0], [0], color=c, marker=m, markersize=8,
+               markeredgecolor="black", markeredgewidth=0.6, linestyle="",
+               label=lbl)
+        for (c, m, lbl) in legend_labels
+    ]
+    ax.legend(handles=legend_handles, loc="upper center",
+              bbox_to_anchor=(0.5, -0.18), fontsize=8, frameon=False, ncol=1)
+    fig.subplots_adjust(bottom=0.32)
+    _savefig(fig, "fig_leakscore_predictive")
+
+
 def main():
     sweep = load_defence_sweep()
     diversity = load_client_diversity()
@@ -390,6 +636,8 @@ def main():
     fig_client_diversity(diversity)
     fig_b1_vs_b4_diverse(sweep)
     fig_leakscore_trajectory()
+    fig_t1rho_heatmap()
+    fig_leakscore_predictive_correlation()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,41 @@
+{
+  "attack": "ggcdm",
+  "n_iter": 100,
+  "n_candidates": null,
+  "time_s": 13.118645668029785,
+  "gradient_score": 0.052837261893566856,
+  "label_recovery": {
+    "asr": 0.0,
+    "predicted": [
+      0
+    ],
+    "truth": [
+      6
+    ],
+    "source": "fc.weight.rowsum",
+    "key_used": "fc.weight",
+    "signal": 0.0
+  },
+  "defence_meta": {
+    "strategy": "fisher",
+    "mask_mode": "fisher",
+    "random_seed": null,
+    "weights_encrypted": 540404,
+    "pct_encrypted": 0.048362791538238525,
+    "encryption_threshold": 7.838352189537545e-07,
+    "classifier_head_guarantee": true,
+    "classifier_head_forced_count": 4054,
+    "classifier_head_forced_layers": [
+      "fc.weight",
+      "fc.bias"
+    ]
+  },
+  "mse": 0.2838655412197113,
+  "psnr": 5.468873238053197,
+  "ssim": -0.019059592838554334,
+  "lpips": 0.28063201904296875,
+  "t1": 0.1,
+  "rho": 0.1,
+  "effective_pct": 0.048,
+  "leakscore": 0.388
+}
