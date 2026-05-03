@@ -33,15 +33,27 @@ class GradInversionBreaching:
 
     Matches the attack-class interface used elsewhere in tests/attack_sanity_check.py:
       attack(gradient_dict, flat, batch_size, labels, original_images)
-        -> {'reconstructed_images': Tensor[B,3,32,32] in normalized space,
+        -> {'reconstructed_images': Tensor[B,3,32,32] in [0,1] DENORMALIZED
+              pixel space (matches Geiping/GGCDM/GI-NAS attack outputs;
+              attack_sanity_check.py's clamp(0,1) is a no-op on this output),
             'score': float cosine similarity to real gradient,
             'breaching_stats': dict}
+
+    Wrapper denormalisation note
+    -----------------------------
+    breaching's seethroughgradients preset optimises in normalised
+    (zero-mean, unit-variance) image space, so the raw rec["data"]
+    tensor has values in roughly [-2, 2]. Without denormalisation
+    here, the downstream PSNR comparison in tests/attack_sanity_check.py
+    runs clamp(0, 1) on a normalised tensor and destroys ~70% of the
+    signal -- root cause of the 6.47-vs-18 dB gap reported in
+    sec VI.H of the paper. Fixed 2026-05-03.
+    """
 
     The model is expected to be positioned on ``device`` with its state_dict
     already loaded (typically from the artifact's ``global_state`` plus BN
     buffers). Gradients are passed as a name-keyed dict and converted to
     breaching's positional list form keyed by ``model.parameters()`` order.
-    """
 
     def __init__(self, model, criterion, device,
                  n_iter=20000,
@@ -128,6 +140,32 @@ class GradInversionBreaching:
         )
 
         recon = rec["data"].detach()
+
+        # Diagnostic: log the raw recon range so we can verify the
+        # pre-denormalisation convention. Expected on a working
+        # seethroughgradients run: roughly [-2, 2] (normalised CIFAR).
+        try:
+            print(f"[GradInversionBreaching] raw recon range: "
+                  f"min={float(recon.min().item()):+.3f} "
+                  f"max={float(recon.max().item()):+.3f} "
+                  f"mean={float(recon.mean().item()):+.3f}")
+        except Exception:
+            pass
+
+        # Denormalise to [0, 1] pixel space so downstream PSNR/SSIM/LPIPS
+        # comparisons in tests/attack_sanity_check.py operate on the same
+        # convention as the original ground-truth tensor (which gets
+        # denormalised by _denormalize() before the comparison). Without
+        # this, attack_sanity_check.py's clamp(0, 1) on a normalised
+        # tensor destroys ~70% of the signal -- root cause of the
+        # 6.47-vs-18 dB gap documented in sec VI.H. See module docstring.
+        mean_t = torch.tensor(
+            CIFAR_MEAN, device=recon.device, dtype=recon.dtype,
+        ).view(1, 3, 1, 1)
+        std_t = torch.tensor(
+            CIFAR_STD, device=recon.device, dtype=recon.dtype,
+        ).view(1, 3, 1, 1)
+        recon = (recon * std_t + mean_t).clamp(0.0, 1.0)
 
         score = float('nan')
         try:
