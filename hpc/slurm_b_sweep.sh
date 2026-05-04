@@ -63,11 +63,18 @@ mkdir -p "$ARTIFACT_DIR" "$ATTACK_DIR"
 
 cd /projects/secure-distributed-ml/AdaGuard
 
-# Phase-1 retrain with overridden client_batch_size.
+# Phase-1 retrain with overridden client_batch_size. Use config_t2_low.yaml
+# (300 clients) instead of config_1k.yaml (1000 clients) -- the 1000-client
+# config triggers a silent run_headless exit after round 1 (observed in
+# 182448 array tasks 0-7, where Phase-1 aggregated round 1 then exited
+# cleanly without raising; Phase-2 then crashed on missing round_249).
+# config_t2_low.yaml matches what K-sweep, 1k_experiment, and the paper
+# main results all use, so the per-task wall and disk budget are also
+# proven within the 12h slurm allocation.
 TMP_CONFIG="$OUTROOT/config_B${B_VAL}_seed${SEED}.yaml"
 python -c "
 import yaml
-with open('hpc/config_1k.yaml') as f:
+with open('hpc/config_t2_low.yaml') as f:
     cfg = yaml.safe_load(f)
 cfg['client_batch_size'] = $B_VAL
 cfg['seed'] = $SEED
