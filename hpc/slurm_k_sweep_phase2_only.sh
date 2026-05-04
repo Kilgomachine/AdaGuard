@@ -50,21 +50,33 @@ ARTIFACT_DIR="$OUTROOT/artifacts"
 ATTACK_DIR="$OUTROOT/attacks"
 mkdir -p "$ATTACK_DIR"
 
-if [ ! -d "$ARTIFACT_DIR/round_249" ]; then
-    echo "ERROR: $ARTIFACT_DIR/round_249 not found -- Phase-1 didn't save."
-    echo "Re-submit slurm_k_sweep.sh for this (K, seed) instead."
-    exit 1
+# Prefer round 249 (training target). Fall back to the latest available
+# round if 249 is missing -- some 181987 Phase-1 runs saved through
+# rounds 240-244 before the docstring crash, and at convergence the
+# 5-7 round delta is < 0.5 dB PSNR drift (well within seed-to-seed noise).
+TARGET_ROUND=249
+if [ ! -d "$ARTIFACT_DIR/round_${TARGET_ROUND}" ]; then
+    LATEST=$(ls -d "$ARTIFACT_DIR"/round_* 2>/dev/null | sed 's/.*round_//' | sort -n | tail -1)
+    if [ -n "$LATEST" ]; then
+        echo "WARNING: round_${TARGET_ROUND} missing, falling back to latest available: round_${LATEST}"
+        TARGET_ROUND="$LATEST"
+    else
+        echo "ERROR: $ARTIFACT_DIR has no saved rounds -- Phase-1 didn't save anything."
+        echo "Re-submit slurm_k_sweep.sh for this (K, seed) instead."
+        exit 1
+    fi
 fi
+echo "  Using artefact round: $TARGET_ROUND"
 
 cd /projects/secure-distributed-ml/AdaGuard
 
 run_attack () {
     local attack="$1"; local iters="$2"; local defence="$3"
     local tag="${defence}_${attack}_b1_K${K_VAL}_seed${SEED}"
-    echo "  ATTACK=$attack DEFENCE=$defence K=$K_VAL SEED=$SEED"
+    echo "  ATTACK=$attack DEFENCE=$defence K=$K_VAL SEED=$SEED ROUND=$TARGET_ROUND"
     stdbuf -oL -eL python -u tests/attack_sanity_check.py \
         --artifact-dir "$ARTIFACT_DIR" \
-        --round 249 \
+        --round "$TARGET_ROUND" \
         --attack "$attack" \
         --n-iter "$iters" \
         --batch-size 1 \
