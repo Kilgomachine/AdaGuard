@@ -48,12 +48,12 @@ class GradInversionBreaching:
     runs clamp(0, 1) on a normalised tensor and destroys ~70% of the
     signal -- root cause of the 6.47-vs-18 dB gap reported in
     sec VI.H of the paper. Fixed 2026-05-03.
-    """
 
     The model is expected to be positioned on ``device`` with its state_dict
     already loaded (typically from the artifact's ``global_state`` plus BN
     buffers). Gradients are passed as a name-keyed dict and converted to
     breaching's positional list form keyed by ``model.parameters()`` order.
+    """
 
     def __init__(self, model, criterion, device,
                  n_iter=20000,
