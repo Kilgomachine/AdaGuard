@@ -139,26 +139,49 @@ class FisherInformationMetric:
         # interpretable in both modes.
         k_enc = max(1, int(self.enc_pct * n))
         if self.mask_mode == 'fisher':
-            # Index by topk indices rather than a `>= threshold` comparison.
-            # The threshold approach is correct in the unique-values case but
-            # overshoots K whenever multiple parameters tie at the K-th value.
-            # The pathological case observed in the cross-round trajectory
-            # study: at early-training rounds (e.g. round 74), the B=1
-            # recomputed gradient has many parameters with exactly-zero
-            # gradient (ReLU sparsity at single-sample backward). Their
-            # squared-gradient Fisher scores are exactly 0, the K-th largest
-            # Fisher value ends up at 0, and `fi_all >= 0` matches every
-            # parameter (Fisher scores are squared, always >= 0) — collapsing
-            # the defence to 100% encryption regardless of the requested
-            # enc_pct. Indexing the topk results directly bounds the mask to
-            # exactly k_enc entries even with ties, falling back to whichever
-            # tied indices torch.topk returns (arbitrary but deterministic
-            # per call, since torch.topk is stable enough for our use).
-            topk_vals_for_mask, topk_idx_for_mask = torch.topk(fi_all, k_enc)
-            threshold = topk_vals_for_mask[-1].item()  # kept for diagnostics
+            # Exclude zero-Fisher parameters from the selection candidate set.
+            #
+            # Rationale (principled, not a workaround):
+            # 1. Encrypting a zero-gradient parameter has no defensive value:
+            #    the attacker observes the same zero whether we mask it or
+            #    not, so masking spends encryption budget on a no-op.
+            # 2. Eliminates the tie-at-zero pathology that collapsed the
+            #    defence to 100% encryption on early-training B=1 recomputed
+            #    gradients. Cross-round trajectory study (round 74,
+            #    seed 42): ReLU sparsity at single-sample backward leaves
+            #    >90% of parameters with exactly-zero gradient. A `>= threshold`
+            #    formulation hit threshold=0 and matched every parameter;
+            #    even a topk-indices formulation would have admitted ~10%
+            #    of effectively-random zero-gradient parameters into the
+            #    mask. Restricting the candidate set to non-zero Fisher
+            #    fixes both pathologies and keeps the selection ranking
+            #    meaningful in the sparse regime.
+            # 3. Semantic shift: pct_encrypted now reports the *actual*
+            #    fraction encrypted, which can be below the nominal enc_pct
+            #    when the gradient is sparser than (1 - enc_pct). This is
+            #    more honest than the prior behaviour and accurately reflects
+            #    that there is nothing more to defend.
+            # 4. Round-249 behaviour is unchanged: the saved gradient at
+            #    converged-model rounds has 0% zeros, so the non-zero
+            #    candidate set is the full parameter pool and the top-K
+            #    selection is identical to the pre-fix code path.
+            nonzero_mask = fi_all > 0
+            n_nonzero = int(nonzero_mask.sum().item())
+            k_effective = min(k_enc, n_nonzero)
             mask_encrypt = torch.zeros(n, dtype=torch.bool)
-            mask_encrypt[topk_idx_for_mask] = True
-        else:  # 'random' — validated in __init__
+            if k_effective > 0:
+                nonzero_idx = torch.nonzero(nonzero_mask, as_tuple=True)[0]
+                nonzero_fi = fi_all[nonzero_idx]
+                topk_vals, topk_local_idx = torch.topk(nonzero_fi, k_effective)
+                topk_global_idx = nonzero_idx[topk_local_idx]
+                threshold = topk_vals[-1].item()
+                mask_encrypt[topk_global_idx] = True
+            else:
+                # All Fisher scores are zero -- gradient carries no signal
+                # to defend. Report empty mask honestly rather than masking
+                # a random subset of zeros.
+                threshold = 0.0
+        else:  # 'random' -- validated in __init__
             gen = torch.Generator()
             if self.random_seed is not None:
                 gen.manual_seed(int(self.random_seed))
