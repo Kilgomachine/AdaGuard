@@ -139,8 +139,25 @@ class FisherInformationMetric:
         # interpretable in both modes.
         k_enc = max(1, int(self.enc_pct * n))
         if self.mask_mode == 'fisher':
-            threshold = torch.topk(fi_all, k_enc)[0][-1].item()
-            mask_encrypt = fi_all >= threshold
+            # Index by topk indices rather than a `>= threshold` comparison.
+            # The threshold approach is correct in the unique-values case but
+            # overshoots K whenever multiple parameters tie at the K-th value.
+            # The pathological case observed in the cross-round trajectory
+            # study: at early-training rounds (e.g. round 74), the B=1
+            # recomputed gradient has many parameters with exactly-zero
+            # gradient (ReLU sparsity at single-sample backward). Their
+            # squared-gradient Fisher scores are exactly 0, the K-th largest
+            # Fisher value ends up at 0, and `fi_all >= 0` matches every
+            # parameter (Fisher scores are squared, always >= 0) — collapsing
+            # the defence to 100% encryption regardless of the requested
+            # enc_pct. Indexing the topk results directly bounds the mask to
+            # exactly k_enc entries even with ties, falling back to whichever
+            # tied indices torch.topk returns (arbitrary but deterministic
+            # per call, since torch.topk is stable enough for our use).
+            topk_vals_for_mask, topk_idx_for_mask = torch.topk(fi_all, k_enc)
+            threshold = topk_vals_for_mask[-1].item()  # kept for diagnostics
+            mask_encrypt = torch.zeros(n, dtype=torch.bool)
+            mask_encrypt[topk_idx_for_mask] = True
         else:  # 'random' — validated in __init__
             gen = torch.Generator()
             if self.random_seed is not None:
