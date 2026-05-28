@@ -97,6 +97,17 @@ class ResNet(nn.Module):
         return self.fc(out)
 
 
+def ResNet10(num_classes=10):
+    """ResNet-10 for CIFAR-10 — ~4.90M params.
+
+    Minimum-depth BasicBlock ResNet (one block per stage). The classifier
+    head is fc.weight/fc.bias, same as ResNet-18, so the existing
+    classifier-head guarantee whitelist ({fc., classifier., head.})
+    applies unchanged.
+    """
+    return ResNet(BasicBlock, [1, 1, 1, 1], num_classes=num_classes)
+
+
 def ResNet18(num_classes=10):
     """ResNet-18 for CIFAR-10 — 11.17M params."""
     return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)

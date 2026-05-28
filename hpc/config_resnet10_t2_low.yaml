@@ -1,0 +1,60 @@
+# Section 2 of the Fisher-sensitivity follow-up: ResNet-10 fork
+# of config_t2_low.yaml. Only `model` is changed.
+#
+# Mirrors hpc/config_t2_low.yaml exactly except for the model
+# field so that the only intentional difference vs the
+# ResNet-18 trajectory is the architecture itself.
+model: resnet10
+num_classes: 10
+image_size: 32
+pretrain_epochs: 0
+pretrain_lr: 0.1
+pretrain_batch_size: 128
+
+num_clients: 300
+clients_per_round: 30
+num_rounds: 250
+client_batch_size: 16
+client_local_steps: 10
+client_lr: 0.01
+fl_lr: 1.0
+
+alpha: 1.0
+beta: 1.0
+gamma: 1.0
+
+# Grad-accum trigger calibration matches ResNet-18 baseline.
+T1: 0.3
+T2: 0.3
+grad_accum_enabled: true
+grad_accum_K: 4
+grad_accum_threshold: 0.3
+
+entropy_bins: 50
+
+empirical_iterations: 50
+empirical_lr: 0.1
+
+gi_iters: 1000
+gi_lr: 0.1
+
+mi_samples_per_class: 20
+
+# Fisher / encryption (must match baseline)
+fisher_topk: 50
+encryption_top_percent: 0.1
+
+save_every_n_rounds: 2
+
+# Focus layers: ResNet-10's classifier head is 'fc.*', same as ResNet-18.
+focus_layers: ['fc.weight', 'fc.bias']
+
+# ResNet-10 is ~5M params (vs ResNet-18's ~11M) so 3 clients/GPU is
+# conservative and safe on V100 16GB.
+clients_per_gpu: 3
+
+# Hard 3-of-10 non-IID partition matching the paper.
+classes_per_client: 3
+min_samples_per_client: 30
+
+seed: 42
