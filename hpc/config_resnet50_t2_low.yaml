@@ -1,10 +1,14 @@
-# Section 2 of the Fisher-sensitivity follow-up: ResNet-10 fork
-# of config_t2_low.yaml. Only `model` is changed.
+# Section 3 of the Fisher-sensitivity follow-up: ResNet-50 fork
+# of config_t2_low.yaml. Two changes vs the baseline:
+#   - model: resnet50 (~23.5M params, BasicBlock -> Bottleneck)
+#   - clients_per_gpu: 2 (memory headroom on V100 16GB; ResNet-50
+#     activation footprint at B=16 fits 2/GPU comfortably but
+#     3/GPU is tight)
 #
-# Mirrors hpc/config_t2_low.yaml exactly except for the model
-# field so that the only intentional difference vs the
-# ResNet-18 trajectory is the architecture itself.
-model: resnet10
+# Mirrors hpc/config_t2_low.yaml otherwise so the only intentional
+# differences vs the ResNet-18 baseline trajectory are the
+# architecture itself and the per-GPU client packing.
+model: resnet50
 num_classes: 10
 image_size: 32
 pretrain_epochs: 0
@@ -51,12 +55,14 @@ save_every_n_rounds: 2
 # using this config directly so we set it here).
 save_artifacts: true
 
-# Focus layers: ResNet-10's classifier head is 'fc.*', same as ResNet-18.
+# Focus layers: ResNet-50's classifier head is 'fc.*' (torchvision
+# convention, same as ResNet-18). Standard whitelist applies.
 focus_layers: ['fc.weight', 'fc.bias']
 
-# ResNet-10 is ~5M params (vs ResNet-18's ~11M) so 3 clients/GPU is
-# conservative and safe on V100 16GB.
-clients_per_gpu: 3
+# ResNet-50 is ~2x ResNet-18 params and ~3-4x activation footprint
+# at B=16. Pack 2 clients per V100 16GB rather than 3 to leave
+# headroom for the Bottleneck block intermediate activations.
+clients_per_gpu: 2
 
 # Hard 3-of-10 non-IID partition matching the paper.
 classes_per_client: 3
