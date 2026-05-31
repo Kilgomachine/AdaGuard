@@ -189,7 +189,18 @@ def _process_client(cid, client, global_state, batch_size, gpu_device, config,
         metrics['fisher_per_weight_mean'] = fw.mean().item()
         metrics['fisher_per_weight_std'] = fw.std().item()
         metrics['fisher_per_weight_median'] = fw.median().item()
-        metrics['fisher_per_weight_p95'] = torch.quantile(fw.float(), 0.95).item()
+        # torch.quantile has an internal sort allocation limit at ~2^24 (~16.7M)
+        # elements -- ResNet-50 (~23.5M params) and VGG-16 (~138M params) both
+        # exceed it and crash with "quantile() input tensor is too large".
+        # Subsample for percentile estimation; at 1M samples the standard error
+        # on a p95 estimate is well under 1% of the value -- statistically fine
+        # for what this metric is used for (diagnostic logging only).
+        _fw_q = fw.float()
+        _QUANTILE_MAX = 1_000_000
+        if _fw_q.numel() > _QUANTILE_MAX:
+            _idx = torch.randperm(_fw_q.numel(), device=_fw_q.device)[:_QUANTILE_MAX]
+            _fw_q = _fw_q[_idx]
+        metrics['fisher_per_weight_p95'] = torch.quantile(_fw_q, 0.95).item()
 
     # MaskCrypt — only computed on-demand when encryption_strategy='maskcrypt'
     # (not part of AdaGuard leakscore; used as baseline comparison only)
