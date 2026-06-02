@@ -120,8 +120,13 @@ class FisherInformationMetric:
         # Normalized to [0,1] via sigmoid-style mapping
         f_round_norm = min(1.0, f_round / (f_round + 1.0)) if f_round > 0 else 0.0
 
-        # Concentration: Gini coefficient on fi_norm
-        s = torch.sort(fi_norm)[0].cpu().numpy()
+        # Concentration: Gini coefficient on fi_norm. Move the sort to CPU
+        # before computing to avoid a GPU-side OOM at large n: torch.sort
+        # allocates a scratch tensor the size of the input, which on
+        # ResNet-50 (23.5M params) + 2 workers/GPU on a V100 16GB pushes
+        # over capacity and cascades the entire client pool into OOM.
+        # np.sort on CPU is equivalent and uses RAM (host has plenty).
+        s = np.sort(fi_norm.detach().cpu().numpy())
         idx = np.arange(1, n + 1)
         gini = (
             (2.0 * np.sum(idx * s) / (n * np.sum(s)) - (n + 1) / n)

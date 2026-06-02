@@ -60,9 +60,12 @@ save_artifacts: true
 focus_layers: ['fc.weight', 'fc.bias']
 
 # ResNet-50 is ~2x ResNet-18 params and ~3-4x activation footprint
-# at B=16. Pack 2 clients per V100 16GB rather than 3 to leave
-# headroom for the Bottleneck block intermediate activations.
-clients_per_gpu: 2
+# at B=16. Observed OOM with 2 workers/GPU on V100 16GB (185401 stderr:
+# torch.OutOfMemoryError cascade starting from torch.sort scratch in
+# Gini compute, then propagating through subsequent client forward
+# passes). Drop to 1 worker/GPU; trades ~2x slower per-round wall-clock
+# for stability.
+clients_per_gpu: 1
 
 # Hard 3-of-10 non-IID partition matching the paper.
 classes_per_client: 3
