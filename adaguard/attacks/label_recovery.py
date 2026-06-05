@@ -123,21 +123,32 @@ def recover_labels_llg(
         signal = cand_signal
 
     if g is None:
+        # No usable fc tensor in the gradient dict at all -- return an
+        # out-of-range sentinel so any downstream ASR computation reads
+        # as "never matched" rather than "happened to match class 0".
         return {
-            'predicted': [0] * int(batch_size),
+            'predicted': [-1] * int(batch_size),
             'source': 'none',
             'key_used': None,
             'signal': 0.0,
+            'abstained': True,
         }
 
-    # Encrypted / masked-to-zero case: no information, return a constant
-    # guess so accuracy collapses against any non-trivial truth set.
+    # Encrypted / masked-to-zero case: no information leaked. Return an
+    # out-of-range sentinel (-1) instead of the prior `[0] * B` default.
+    # The previous behaviour was producing false-positive ASR=1.0 whenever
+    # the targeted client's true label happened to be class 0 (~1/C chance
+    # per cell) -- silently inflating ASR by ~10% on CIFAR-10 even when
+    # the defence had fully suppressed the signal. With -1, predicted vs
+    # truth comparisons deterministically fail when signal is degenerate,
+    # which is the correct semantics ("no information => no recovery").
     if signal < 1e-12:
         return {
-            'predicted': [0] * int(batch_size),
+            'predicted': [-1] * int(batch_size),
             'source': source,
             'key_used': key_used,
             'signal': signal,
+            'abstained': True,
         }
 
     order = torch.argsort(g)  # ascending => most-negative first
