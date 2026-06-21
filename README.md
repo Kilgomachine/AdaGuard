@@ -1,4 +1,4 @@
-# AdaGuard: Leakage-Aware Adaptive Selective Encryption for Federated Learning
+# AdaGuard: Leakage, Aware Adaptive Selective Encryption for Federated Learning
 
 Replication package for **"AdaGuard: Fisher-Information-Guided Selective Homomorphic Encryption against Gradient-Inversion Attacks in Federated Learning"**.
 
