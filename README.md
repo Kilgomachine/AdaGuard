@@ -173,7 +173,7 @@ If you use this code in your research, please cite:
 @article{adaguard2026,
   title   = {AdaGuard: Fisher-Information-Guided Selective Homomorphic Encryption
              against Gradient-Inversion Attacks in Federated Learning},
-  author  = {Aguir, Matias and Barrak, Amine and others},
+  author  = {},
   journal = {IEEE Transactions on Dependable and Secure Computing},
   year    = {2026},
   note    = {Under review}
