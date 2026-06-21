@@ -163,20 +163,7 @@ On ResNet-50 across training (rounds 50 / 100 / 150), the `fc.weight` Fisher ran
 
 We release the per-cell attack JSONs, training trajectories, and reconstruction images for the headline matrix and the architecture-transfer study under `paper_artifacts/`. The full per-round model checkpoints (~700 GB for the ResNet-50 trajectories) are available on request given storage constraints.
 
-## Citation
 
-If you use this code in your research, please cite:
-
-```bibtex
-@article{adaguard2026,
-  title   = {AdaGuard: Fisher-Information-Guided Selective Homomorphic Encryption
-             against Gradient-Inversion Attacks in Federated Learning},
-  author  = {},
-  journal = {IEEE Transactions on Dependable and Secure Computing},
-  year    = {2026},
-  note    = {Under review}
-}
-```
 
 ## License
 
