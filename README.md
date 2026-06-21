@@ -146,17 +146,17 @@ The `test_fisher_classifier_head_guarantee.py` fixture locks the structural patc
 
 ## Key findings
 
-### Privacy outcome — label channel collapses universally
+### Privacy outcome, label channel collapses universally
 Across all 12 defence×attack cells, every defence (FHE, MaskCrypt, AdaGuard-Fisher) reduces label-recovery ASR to 0. The classifier-head guarantee makes this architecture-portable: ASR = 0 on every ResNet-10 / 18 / 50 cell at $\rho = 0.10$ (108 cells total).
 
-### Pixel channel — AdaGuard's Fisher targeting holds the noise band
+### Pixel channel, AdaGuard's Fisher targeting holds the noise band
 On the headline ResNet-18 matrix, V4 holds GradInversion and GI-NAS in the noise band (PSNR < 10 dB) at $\rho = 0.10$, matching the V2 (FHE) cryptographic upper bound to within multi-seed dispersion while encrypting an order of magnitude less of the gradient surface.
 
 ### Architecture-scaling caveat (concentrated on GradInversion at converged stages)
 At fixed $\rho = 0.10$ and late training, GradInversion PSNR climbs with parameter count: ResNet-10 (4.9 M) noise, ResNet-18 (11.2 M) noise, ResNet-50 (23.5 M) blob.
 
 ### ResNet-50 floor is non-gradient-bounded
-The extended $\rho$-sweep on ResNet-50 reveals that PSNR does not vary with encryption budget across $\rho \in \{0.05, \ldots, 0.90\}$ — GradInversion sits in a 0.84 dB band entirely in the noise region. The residual reconstruction is therefore bounded by non-gradient leakage (BatchNorm running stats, attack label-conditional priors), not by the unencrypted gradient mass. LPIPS does rise monotonically with $\rho$, indicating that the defence has a perceptual effect even when PSNR is floor-bounded.
+The extended $\rho$-sweep on ResNet-50 reveals that PSNR does not vary with encryption budget across $\rho \in \{0.05, \ldots, 0.90\}$, GradInversion sits in a 0.84 dB band entirely in the noise region. The residual reconstruction is therefore bounded by non-gradient leakage (BatchNorm running stats, attack label-conditional priors), not by the unencrypted gradient mass. LPIPS does rise monotonically with $\rho$, indicating that the defence has a perceptual effect even when PSNR is floor-bounded.
 
 ### Fisher mass trajectory
 On ResNet-50 across training (rounds 50 / 100 / 150), the `fc.weight` Fisher rank drops from #1 to #3 as convolutional layers learn features. This is direct mechanistic evidence that the classifier-head guarantee is structurally redundant early in training and load-bearing late.
