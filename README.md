@@ -4,7 +4,7 @@ Replication package for **"AdaGuard: Fisher-Information-Guided Selective Homomor
 
 This repository contains the full source code, configuration files, HPC job scripts, and analysis utilities required to reproduce every result reported in the paper, including the headline 4×3 defence×attack matrix, the architecture-transfer study across ResNet-10 / ResNet-18 / ResNet-50, and the extended encryption-fraction sweep that establishes the ResNet-50 PSNR floor.
 
-> Paper: *(arXiv link to be added on acceptance)*
+> Paper: *placeholder*
 > Submission target: IEEE TDSC
 
 ## Overview
